@@ -1,0 +1,45 @@
+schema_version: 1
+install_scope: project
+memory_root: .
+allowed_memory_types:
+  - code
+  - decision
+  - domain
+  - failure
+  - preference
+  - project
+  - research
+collection_name: agent_memory
+embedding:
+  provider: ollama
+  model: qwen3-embedding:8b
+  dim: 4096
+  endpoint: http://localhost:11434
+limits:
+  max_content_bytes: 4096
+retrieval:
+  default_limit: 1
+  advisory_memory: true
+  associative:
+    enabled: false
+    limit: 3
+    min_score: 0.35
+    strategy: keys_then_embedding
+worker:
+  mode: manual
+  interval_seconds: 5.0
+service:
+  mode: resident
+  pid_check_interval_seconds: 60
+storage:
+  # setup/init generates a fresh UUID and project slug. Do not reuse this example UUID directly.
+  instance_uuid: 00000000-0000-4000-8000-000000000001
+  backend: milvus_lite
+  milvus_lite:
+    db_path: .memory/milvus/example_project-00000000000040008000000000000001.db
+    bridge: python_process
+  milvus_remote:
+    uri: null
+    database: agent_memory_example_project_00000000000040008000000000000001
+    collection: agent_memory
+    token: null

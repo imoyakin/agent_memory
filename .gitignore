@@ -1,0 +1,12 @@
+.memory/
+.agents/agent_memory
+/agent_memory
+memory.yaml
+.venv/
+.omx/
+.agents/skills/
+target/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage

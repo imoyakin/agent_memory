@@ -1,0 +1,6 @@
+interface:
+  display_name: "Agent Memory"
+  short_description: "Rust memory service with Milvus Lite or remote Milvus"
+  default_prompt: "Use $agent-memory to discover memory.yaml, initialize the Rust memory runtime, start the PID-bound service, search prior context, add durable memories, and migrate between Milvus Lite and remote Milvus when configured."
+policy:
+  allow_implicit_invocation: true
