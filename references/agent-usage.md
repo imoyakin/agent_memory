@@ -9,10 +9,15 @@ official documentation, and fresh tool output outrank stored memory.
 
 ## Search Before Asking
 
+Before any memory operation, ensure `<skill-root>/bin/agent-memory` exists. If
+it is missing, run `<skill-root>/scripts/install-agent-memory.sh` and choose
+binary or source install. Binary install downloads release assets into `bin/`;
+source install builds the current checkout locally.
+
 Before search, confirm the active config:
 
 ```bash
-agent-memory --agent memory discover
+<skill-root>/bin/agent-memory --agent memory discover
 ```
 
 If discovery reports no config, run the setup path first. The setup path creates
@@ -30,7 +35,7 @@ repo conventions, user preferences, known failures, domain knowledge, or
 research conclusions.
 
 ```bash
-agent-memory --agent memory search "query text"
+<skill-root>/bin/agent-memory --agent memory search "query text"
 ```
 
 The CLI is human-readable by default. Agents and scripts should pass `--agent`

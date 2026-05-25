@@ -1,8 +1,8 @@
 ---
 name: agent-memory
-description: Use agent-memory as a repository-installed memory skill for coding agents. Discover `memory.yaml` from AGENTS.md, `.memory/`, `.agents/agent_memory/`, or repo root; initialize the bundled uv runtime and `.memory/`; run one resident service per project root; search advisory memory before history-sensitive work; add durable memories; and keep global installs limited to machine/user-preference memory.
+description: Use agent-memory as a repository-installed memory skill for coding agents. Bootstrap `<skill-root>/bin/agent-memory` with the bundled install script when missing; discover `memory.yaml` from AGENTS.md, `.memory/`, `.agents/agent_memory/`, or repo root; initialize `.memory/`; run one resident service per project root; search advisory memory before history-sensitive work; add durable memories; and keep global installs limited to machine/user-preference memory.
 license: Apache-2.0
-compatibility: Requires Rust/Cargo, Python 3.10+, uv, and user configuration for the embedding provider. The bundled setup builds the Rust CLI and installs pymilvus[bulk_writer,milvus-lite] in the uv environment for the Lite bridge.
+compatibility: Binary install requires a supported GitHub Release asset for this platform. Source install requires Rust/Cargo. The Python Lite bridge can use a packaged platform binary or fall back to uv with Python 3.10+ and pymilvus[bulk_writer,milvus-lite].
 metadata:
   version: "0.1.0"
 allowed-tools: Bash
@@ -14,6 +14,30 @@ This repository is the skill. It includes the instructions, bundled CLI,
 configuration templates, and references needed after installation.
 
 Run commands from the target repository with the Rust `agent-memory` binary.
+The preferred installed binary is `<skill-root>/bin/agent-memory`.
+
+## Bootstrap First
+
+Before running memory commands, make sure the installed binary exists:
+
+```bash
+test -x <skill-root>/bin/agent-memory || <skill-root>/scripts/install-agent-memory.sh
+```
+
+When prompted, choose binary install to download release assets into `bin/`, or
+source install to build this checkout locally. Binary install downloads the Rust
+CLI and, when available for the platform, a packaged Python Lite bridge. Source
+install builds the Rust CLI with Cargo and can package the bridge with
+PyInstaller; otherwise the bridge falls back to `uv run`.
+
+The installed runtime entrypoints are:
+
+- `<skill-root>/bin/agent-memory`
+- `<skill-root>/bin/agent-memory-lite-bridge` when a packaged bridge is available
+
+Agents should use `<skill-root>/bin/agent-memory` when the absolute skill path is
+known. If only `agent-memory` is available on PATH, that is acceptable for user
+shell examples.
 
 ## Discovery First
 
@@ -62,8 +86,8 @@ the terminal view only when presenting status directly to a person.
 If the user writes `$agent_memory init`, run:
 
 ```bash
-agent-memory --agent init --start-service
-agent-memory --agent service status
+<skill-root>/bin/agent-memory --agent init --start-service
+<skill-root>/bin/agent-memory --agent service status
 ```
 
 This initializes the current project if needed, refreshes the managed AGENTS.md
@@ -74,7 +98,8 @@ memory hook, and starts the resident service.
 Codex does not run `SKILL.md` as an installer and does not automatically
 initialize this skill when the skill is discovered. Treat this file as operating
 instructions only. Before using memory in a repository, an agent or user must
-explicitly run the setup command below once for that target repository.
+explicitly install the binary and run the setup command below once for that
+target repository.
 
 Initialize from the target repo:
 
@@ -82,13 +107,14 @@ Initialize from the target repo:
 agent-memory setup
 ```
 
-The Rust setup command runs `uv sync` for this skill, creates `memory.yaml`, and writes
-an AGENTS.md block with the config pointer, `--agent` commands, and operating
-rules. `init` refreshes the same managed block after runtime initialization so
-future agents can discover, search, and write memory without reading this
-`SKILL.md` first. By default it writes `.agents/agent_memory/memory.yaml` and
-uses local Milvus Lite; use `--config`, `--backend`, and `--remote-uri` to
-override that.
+The Rust setup command creates `memory.yaml` and writes an AGENTS.md block with
+the config pointer, `--agent` commands, and operating rules. The install script
+runs `uv sync` when uv is available so the Lite bridge fallback and UI viewer
+remain usable. `init` refreshes the same managed block after runtime
+initialization so future agents can discover, search, and write memory without
+reading this `SKILL.md` first. By default it writes
+`.agents/agent_memory/memory.yaml` and uses local Milvus Lite; use `--config`,
+`--backend`, and `--remote-uri` to override that.
 
 Ask the user to edit `memory.yaml` when provider/model/endpoint are not already
 known. Then initialize runtime state:
@@ -270,6 +296,17 @@ Clear all project memory only on explicit user instruction:
 ```bash
 agent-memory memory clear --yes
 ```
+
+Uninstall a project integration with:
+
+```bash
+<skill-root>/scripts/uninstall-agent-memory.sh --project-root <target-repo>
+```
+
+The uninstall script stops the project service, asks whether to dump memory,
+optionally clears `.memory/`, and removes only the managed AGENTS.md block
+between the `agent-memory:config` markers. Use `--remove-binaries` only when
+removing the skill-local `bin/` entrypoints too.
 
 ## References
 

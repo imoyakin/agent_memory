@@ -6,6 +6,8 @@ memory.yaml
 .omx/
 .agents/skills/
 target/
+bin/*
+!bin/.gitkeep
 __pycache__/
 *.pyc
 .pytest_cache/

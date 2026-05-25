@@ -3,21 +3,22 @@
 Generate an editable config in the target repo:
 
 ```bash
-agent-memory setup
+<skill-root>/bin/agent-memory setup
 ```
 
 Initialize memory from it:
 
 ```bash
-agent-memory setup --init
+<skill-root>/bin/agent-memory setup --init
 ```
 
-Codex skills are passive instruction files. Codex does not automatically run
-this setup command just because `SKILL.md` exists or is loaded.
+Codex skills are passive instruction files. Codex does not automatically run the
+install or setup commands just because `SKILL.md` exists or is loaded.
 
-`agent-memory setup` also runs `uv sync` for the installed skill repository.
-That makes the skill's Python environment explicit instead of relying only on
-lazy `uv run` creation.
+`scripts/install-agent-memory.sh` installs the runtime entrypoint at
+`bin/agent-memory`. Binary mode downloads GitHub Release assets; source mode
+builds the Rust CLI locally. The script also runs `uv sync` when uv is available
+so the Python Lite bridge fallback and local UI viewer can run.
 
 The user-editable config is `memory.yaml`. Discovery checks, in order:
 

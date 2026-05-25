@@ -6,8 +6,11 @@ This repository is laid out as an installable Codex skill. Clone or install the
 repository root as the skill directory; the root contains `SKILL.md`, bundled
 CLI code, `references/`, and `assets/`.
 
-The operational CLI is the Rust `agent-memory` binary.
-The Python package only exposes the Milvus Lite bridge used by that Rust CLI.
+The operational CLI is the Rust `agent-memory` binary. Installed skills should
+use `bin/agent-memory` as the stable entrypoint. The Python package only exposes
+the Milvus Lite bridge used by that Rust CLI; release builds may also include a
+platform-specific `bin/agent-memory-lite-bridge` executable so normal Lite
+operations do not need to spawn Python through uv.
 
 The storage and retrieval design is maintained in `DESIGN.md`.
 
@@ -15,6 +18,7 @@ Example local install by clone:
 
 ```bash
 git clone <repo-url> ~/.codex/skills/agent-memory
+~/.codex/skills/agent-memory/scripts/install-agent-memory.sh
 ```
 
 After installing or updating the skill, restart Codex so the new `SKILL.md` is
@@ -42,13 +46,24 @@ Milvus fields.
 Initialize a project:
 
 ```bash
-agent-memory setup
+bin/agent-memory setup
 # edit memory.yaml
-agent-memory setup --init
+bin/agent-memory setup --init
 ```
 
-Codex does not automatically run this setup from `SKILL.md`; initialization is
-an explicit first-use step for each target repository.
+Codex does not automatically run this setup from `SKILL.md`; binary bootstrap
+and project initialization are explicit first-use steps for each installation
+and target repository.
+
+The install script supports two install modes:
+
+- Binary install downloads `agent-memory-<platform>` and, when available,
+  `agent-memory-lite-bridge-<platform>` from GitHub Release assets into `bin/`.
+- Source install builds the Rust CLI locally with Cargo and can package the Lite
+  bridge locally, falling back to uv when packaging is unavailable.
+
+Both modes converge on `bin/agent-memory`. The script records installation
+metadata in `bin/install-state.json`, which is local and ignored by git.
 
 By default setup writes `.agents/agent_memory/memory.yaml` and records that path
 plus memory operating rules in `AGENTS.md`. `init` also refreshes the managed

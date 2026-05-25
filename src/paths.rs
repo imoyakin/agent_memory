@@ -50,7 +50,33 @@ pub(crate) fn skill_root() -> Result<PathBuf> {
     if let Ok(root) = std::env::var("AGENT_MEMORY_SKILL_ROOT") {
         return Ok(PathBuf::from(root));
     }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            if parent.file_name().and_then(|name| name.to_str()) == Some("bin") {
+                if let Some(root) = parent.parent() {
+                    if root.join("SKILL.md").exists() {
+                        return Ok(root.to_path_buf());
+                    }
+                }
+            }
+            if parent.join("SKILL.md").exists() {
+                return Ok(parent.to_path_buf());
+            }
+        }
+    }
     Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+}
+
+pub(crate) fn skill_bin_path(name: &str) -> Result<PathBuf> {
+    Ok(skill_root()?.join("bin").join(executable_name(name)))
+}
+
+pub(crate) fn executable_name(name: &str) -> String {
+    if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    }
 }
 
 pub(crate) fn home_root() -> PathBuf {

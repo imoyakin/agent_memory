@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 
 use crate::config::{BackendKind, MilvusRemoteConfig, RuntimeConfig};
 use crate::models::{MemoryRecord, VectorHit};
-use crate::paths::{resolve_under_root, skill_root};
+use crate::paths::{resolve_under_root, skill_bin_path, skill_root};
 use crate::records::record_value;
 use crate::search::reliability_score;
 use crate::{DEFAULT_DIM, PRIMARY_FIELD, SCHEMA_VERSION, VECTOR_FIELD};
@@ -392,18 +392,25 @@ pub(crate) fn active_collection_name(config: &RuntimeConfig) -> String {
 }
 
 pub(crate) fn lite_bridge(args: &[String], stdin_json: Option<Value>) -> Result<Value> {
-    let skill_root = skill_root()?;
-    let mut command = Command::new("uv");
-    command
-        .arg("run")
-        .arg("--project")
-        .arg(&skill_root)
-        .arg("python")
-        .arg("-m")
-        .arg("agent_memory.lite_bridge")
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    let bridge = skill_bin_path("agent-memory-lite-bridge")?;
+    let mut command = if bridge.is_file() {
+        let mut command = Command::new(&bridge);
+        command.args(args);
+        command
+    } else {
+        let skill_root = skill_root()?;
+        let mut command = Command::new("uv");
+        command
+            .arg("run")
+            .arg("--project")
+            .arg(&skill_root)
+            .arg("python")
+            .arg("-m")
+            .arg("agent_memory.lite_bridge")
+            .args(args);
+        command
+    };
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
     if stdin_json.is_some() {
         command.stdin(Stdio::piped());
     }

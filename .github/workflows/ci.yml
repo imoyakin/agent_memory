@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v5
+      - name: Install Python dependencies
+        run: uv sync --locked
+      - name: Check Rust formatting
+        run: cargo fmt --check
+      - name: Run tests
+        run: cargo test
+      - name: Run clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Check CLI help
+        run: cargo run -- --help

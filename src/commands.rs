@@ -628,10 +628,10 @@ fn markdown_table(headers: &[&str], rows: &[Vec<String>]) -> String {
     output.push('\n');
     for row in rows {
         output.push('|');
-        for index in 0..headers.len() {
+        for (index, width) in widths.iter().enumerate().take(headers.len()) {
             let cell = row.get(index).map(String::as_str).unwrap_or("");
             output.push(' ');
-            output.push_str(&pad_cell(&truncate_cell(cell), widths[index]));
+            output.push_str(&pad_cell(&truncate_cell(cell), *width));
             output.push_str(" |");
         }
         output.push('\n');
