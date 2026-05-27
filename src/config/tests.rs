@@ -2,32 +2,25 @@
 mod tests {
     use super::*;
 
+    const REMOVED_BACKEND: &str = concat!("mil", "vus");
+
     #[test]
     fn default_config_has_uuid_backed_storage() {
         let config = UserConfig::default();
-        assert_eq!(config.storage.backend, BackendKind::Qdrant);
         assert!(config
             .storage
             .qdrant
             .storage_path
             .contains(&uuid_hex(&config.storage.instance_uuid)));
-        assert!(config
-            .storage
-            .milvus_lite
-            .db_path
-            .contains(&uuid_hex(&config.storage.instance_uuid)));
-        assert!(config
-            .storage
-            .milvus_remote
-            .database
-            .contains(&uuid_hex(&config.storage.instance_uuid)));
+        let serialized = serde_yaml::to_string(&config).unwrap();
+        assert!(!serialized.to_ascii_lowercase().contains(REMOVED_BACKEND));
     }
 
     #[test]
     fn global_template_uses_home_runtime_memory_dir() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("memory.yaml");
-        write_user_config_template(&path, "global", BackendKind::MilvusLite, None, false).unwrap();
+        write_user_config_template(&path, "global", false).unwrap();
 
         let config = load_user_config(&path).unwrap();
         assert_eq!(config.install_scope, "global");
@@ -36,6 +29,8 @@ mod tests {
             config.allowed_memory_types,
             vec!["environment".to_string(), "preference".to_string()]
         );
+        let serialized = fs::read_to_string(&path).unwrap();
+        assert!(!serialized.to_ascii_lowercase().contains(REMOVED_BACKEND));
     }
 
     #[test]
@@ -43,9 +38,6 @@ mod tests {
         let mut storage = StorageConfig::default();
         normalize_storage_for_runtime(&mut storage, Path::new("/tmp/My Project"), "project");
         assert!(storage.qdrant.storage_path.contains("my_project-"));
-        assert!(storage.milvus_lite.db_path.contains("my_project-"));
-        assert_eq!(storage.milvus_remote.database, "my_project");
-        assert_eq!(storage.milvus_remote.collection, "memories");
     }
 
     #[test]
@@ -78,8 +70,5 @@ mod tests {
         normalize_storage_for_runtime(&mut storage, Path::new("/tmp/My Project!"), "project");
 
         assert!(storage.qdrant.storage_path.contains("my_project-"));
-        assert!(storage.milvus_lite.db_path.contains("my_project-"));
-        assert_eq!(storage.milvus_remote.database, "my_project");
-        assert_eq!(storage.milvus_remote.collection, "memories");
     }
 }

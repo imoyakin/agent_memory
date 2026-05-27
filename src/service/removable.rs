@@ -6,11 +6,9 @@ fn removable_storage_accessible(root: &Path, config: &UserConfig) -> bool {
     if !memory.is_dir() {
         return false;
     }
-    if config.storage.backend == BackendKind::Qdrant {
-        let storage_path = resolve_under_root(root, &config.storage.qdrant.storage_path);
-        if !storage_path.is_dir() {
-            return false;
-        }
+    let storage_path = resolve_under_root(root, &config.storage.qdrant.storage_path);
+    if !storage_path.is_dir() {
+        return false;
     }
     let heartbeat = memory.join(".service-heartbeat");
     OpenOptions::new()

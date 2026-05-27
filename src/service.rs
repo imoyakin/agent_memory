@@ -14,7 +14,7 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::config::{BackendKind, UserConfig};
+use crate::config::UserConfig;
 use crate::ipc;
 use crate::models::{ProcessRegistryEntry, ServiceState};
 use crate::paths::{home_path, project_path, resolve_under_root, HomePath, ProjectPath};

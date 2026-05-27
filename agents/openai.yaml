@@ -1,6 +1,6 @@
 interface:
   display_name: "Agent Memory"
   short_description: "Rust memory service with local Qdrant and gateway dashboard proxy"
-  default_prompt: "Use $agent-memory to install bin/agent-memory when missing, discover memory.yaml, initialize the Rust memory runtime, start the resident service, search prior context, add durable memories, inspect local Qdrant through the gateway /dashboard proxy, attach SSH-forwarded remote gateways explicitly, and migrate to legacy Milvus backends when configured."
+  default_prompt: "Use $agent-memory to install bin/agent-memory when missing, discover memory.yaml, initialize the Rust memory runtime, start the resident service, search prior context, add durable memories, inspect local Qdrant through the gateway /dashboard proxy, and attach SSH-forwarded remote gateways explicitly."
 policy:
   allow_implicit_invocation: true

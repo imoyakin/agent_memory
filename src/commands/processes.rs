@@ -150,10 +150,6 @@ fn local_viewer_url_for_root(root: &Path) -> Option<Value> {
     if gateway.get("active").and_then(Value::as_bool) != Some(true) {
         return None;
     }
-    let config = load_runtime_config(root).ok()?;
-    if config.storage.backend != BackendKind::Qdrant {
-        return None;
-    }
     let endpoint = gateway.get("endpoint").and_then(Value::as_str)?;
     Some(json!(qdrant_viewer_url(endpoint, root)))
 }

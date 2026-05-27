@@ -1,8 +1,6 @@
 use clap::{ArgAction, Parser, Subcommand};
 use std::path::PathBuf;
 
-use crate::config::BackendKind;
-
 #[derive(Parser)]
 #[command(name = "agent-memory")]
 pub(crate) struct Cli {
@@ -30,14 +28,6 @@ pub(crate) enum Commands {
         endpoint: Option<String>,
         #[arg(long)]
         collection: Option<String>,
-        #[arg(long, value_enum)]
-        backend: Option<BackendKind>,
-        #[arg(long)]
-        remote_uri: Option<String>,
-        #[arg(long)]
-        remote_token: Option<String>,
-        #[arg(long)]
-        verify_remote: bool,
         #[arg(long)]
         force: bool,
         #[arg(long = "no-update-agents", action = ArgAction::SetFalse, default_value_t = true)]
@@ -53,14 +43,6 @@ pub(crate) enum Commands {
         config: PathBuf,
         #[arg(long, default_value = "project")]
         install_scope: String,
-        #[arg(long, value_enum, default_value_t = BackendKind::Qdrant)]
-        backend: BackendKind,
-        #[arg(long)]
-        remote_uri: Option<String>,
-        #[arg(long)]
-        remote_token: Option<String>,
-        #[arg(long)]
-        verify_remote: bool,
         #[arg(long)]
         force_template: bool,
         #[arg(long = "no-update-agents", action = ArgAction::SetFalse, default_value_t = true)]
@@ -83,10 +65,6 @@ pub(crate) enum Commands {
         output: PathBuf,
         #[arg(long, default_value = "project")]
         install_scope: String,
-        #[arg(long, value_enum, default_value_t = BackendKind::Qdrant)]
-        backend: BackendKind,
-        #[arg(long)]
-        remote_uri: Option<String>,
         #[arg(long)]
         update_agents: bool,
         #[arg(long)]
@@ -158,10 +136,6 @@ pub(crate) enum AgentsHookCommands {
         config: PathBuf,
         #[arg(long, default_value = "project")]
         install_scope: String,
-        #[arg(long, value_enum, default_value_t = BackendKind::Qdrant)]
-        backend: BackendKind,
-        #[arg(long)]
-        remote_uri: Option<String>,
     },
     Remove,
 }
@@ -221,19 +195,6 @@ pub(crate) enum MemoryCommands {
     },
     #[command(about = "Inspect memory and embedding health")]
     Audit,
-    #[command(about = "Migrate records to another storage backend")]
-    Migrate {
-        #[arg(long, value_enum)]
-        to_backend: BackendKind,
-        #[arg(long)]
-        remote_uri: Option<String>,
-        #[arg(long)]
-        remote_token: Option<String>,
-        #[arg(long)]
-        new_instance: bool,
-        #[arg(long)]
-        verify_remote: bool,
-    },
     #[command(about = "Export records and runtime config")]
     Dump {
         #[arg(long)]
@@ -294,12 +255,6 @@ pub(crate) enum UiCommands {
         host: String,
         #[arg(long, default_value_t = 19531)]
         port: u16,
-        #[arg(long, default_value_t = 10)]
-        max_workers: u16,
-        #[arg(long)]
-        stop_service: bool,
-        #[arg(long, default_value_t = 5)]
-        timeout_seconds: u64,
     },
     #[command(about = "Show the local UI inspection endpoint status")]
     Status,

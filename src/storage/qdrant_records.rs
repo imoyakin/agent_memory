@@ -219,3 +219,47 @@ fn qdrant_host_port(uri: &str) -> Result<(String, u16)> {
     let port = parsed.port_or_known_default().unwrap_or(6333);
     Ok((host, port))
 }
+
+pub(crate) fn active_collection_name(config: &RuntimeConfig) -> String {
+    config.collection_name.clone()
+}
+
+pub(crate) fn search_vector_backend(
+    root: &Path,
+    config: &RuntimeConfig,
+    vector: &[f32],
+    limit: usize,
+) -> Result<Vec<VectorHit>> {
+    qdrant_search_vectors(root, config, vector, limit)
+}
+
+pub(crate) fn parse_vector_hits(value: &Value) -> Result<Vec<VectorHit>> {
+    let mut hits = Vec::new();
+    let Some(items) = value.as_array() else {
+        return Ok(hits);
+    };
+    for item in items {
+        let Some(object) = item.as_object() else {
+            continue;
+        };
+        let uuid = object
+            .get(PRIMARY_FIELD)
+            .or_else(|| object.get("id"))
+            .and_then(|value| {
+                value
+                    .as_str()
+                    .map(ToString::to_string)
+                    .or_else(|| value.as_i64().map(|item| item.to_string()))
+            });
+        let Some(uuid) = uuid else {
+            continue;
+        };
+        let distance = object
+            .get("distance")
+            .or_else(|| object.get("score"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        hits.push(VectorHit { uuid, distance });
+    }
+    Ok(hits)
+}

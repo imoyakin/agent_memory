@@ -15,7 +15,7 @@ Usage: scripts/uninstall-agent-memory.sh [options]
 
 Options:
   --project-root <path>     Project root whose generated AGENTS.md hook should be removed.
-  --remove-binaries         Also remove bin/agent-memory and packaged bridge.
+  --remove-binaries         Also remove installed agent-memory and Qdrant binaries.
   -y, --yes                 Do not prompt; keep memory and remove only the exact AGENTS hook.
   -h, --help                Show this help.
 EOF
@@ -66,7 +66,7 @@ if [[ -f "$AGENTS_FILE" ]]; then
 fi
 
 if [[ "$REMOVE_BINARIES" -eq 1 ]]; then
-  rm -f "$BIN_DIR/agent-memory" "$BIN_DIR/agent-memory-lite-bridge" "$BIN_DIR/qdrant" "$BIN_DIR/install-state.json"
+  rm -f "$BIN_DIR/agent-memory" "$BIN_DIR/qdrant" "$BIN_DIR/install-state.json"
   rm -rf "$BIN_DIR/qdrant-static"
 fi
 

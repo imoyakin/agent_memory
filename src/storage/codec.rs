@@ -74,13 +74,6 @@ fn entity_for_record(record: &MemoryRecord, vector: &[f32]) -> Result<Map<String
     Ok(entity)
 }
 
-fn records_from_value(value: &Value) -> Result<Vec<MemoryRecord>> {
-    let Some(items) = value.as_array() else {
-        return Ok(Vec::new());
-    };
-    items.iter().map(record_from_entity).collect()
-}
-
 fn record_from_entity(value: &Value) -> Result<MemoryRecord> {
     let updated_at = string_field(value, "updated_at").unwrap_or_default();
     Ok(MemoryRecord {
@@ -197,8 +190,4 @@ fn vector_from_entity(value: &Value) -> Option<Vec<f32>> {
 
 fn zero_vector(dim: usize) -> Vec<f32> {
     vec![0.0; dim.max(1)]
-}
-
-fn escape_milvus_string(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
 }

@@ -5,7 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BIN_DIR="$SKILL_ROOT/bin"
 RUST_BIN="$BIN_DIR/agent-memory"
-BRIDGE_BIN="$BIN_DIR/agent-memory-lite-bridge"
 QDRANT_BIN="$BIN_DIR/qdrant"
 QDRANT_STATIC_DIR="$BIN_DIR/qdrant-static"
 
@@ -15,7 +14,6 @@ REPO="${AGENT_MEMORY_GITHUB_REPO:-}"
 TARGET_ROOT="$PWD"
 INIT_PROJECT=0
 UPDATE_AGENTS=1
-BRIDGE_MODE="auto"
 QDRANT_MODE="auto"
 QDRANT_VERSION="latest"
 QDRANT_WEB_UI_VERSION="${AGENT_MEMORY_QDRANT_WEB_UI_VERSION:-latest}"
@@ -31,7 +29,6 @@ Options:
   --target-root <path>              Project root to receive AGENTS.md hook and optional init.
   --init-project                    Run setup --init --start-service after installation.
   --no-update-agents                Do not inject or refresh the target AGENTS.md hook.
-  --bridge <auto|binary|uv|none>    Install packaged Python Lite bridge. Default: auto.
   --qdrant <auto|binary|system|none> Install Qdrant server binary. Default: auto.
   --qdrant-version <tag|latest>      Qdrant release version. Default: latest.
   --qdrant-web-ui-version <tag|latest>
@@ -48,7 +45,6 @@ while [[ $# -gt 0 ]]; do
     --target-root) TARGET_ROOT="${2:?}"; shift 2 ;;
     --init-project) INIT_PROJECT=1; shift ;;
     --no-update-agents) UPDATE_AGENTS=0; shift ;;
-    --bridge) BRIDGE_MODE="${2:?}"; shift 2 ;;
     --qdrant) QDRANT_MODE="${2:?}"; shift 2 ;;
     --qdrant-version) QDRANT_VERSION="${2:?}"; shift 2 ;;
     --qdrant-web-ui-version) QDRANT_WEB_UI_VERSION="${2:?}"; shift 2 ;;
@@ -58,7 +54,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$MODE" in binary|source|auto) ;; *) echo "--mode must be binary, source, or auto" >&2; exit 2 ;; esac
-case "$BRIDGE_MODE" in auto|binary|uv|none) ;; *) echo "--bridge must be auto, binary, uv, or none" >&2; exit 2 ;; esac
 case "$QDRANT_MODE" in auto|binary|system|none) ;; *) echo "--qdrant must be auto, binary, system, or none" >&2; exit 2 ;; esac
 TARGET_ROOT="$(cd "$TARGET_ROOT" && pwd)"
 
@@ -234,11 +229,8 @@ download_asset() {
 sync_uv() {
   if command -v uv >/dev/null 2>&1; then
     uv sync --project "$SKILL_ROOT"
-  elif [[ ! -x "$BRIDGE_BIN" ]]; then
-    echo "uv is required when no packaged Lite bridge is installed" >&2
-    exit 1
   else
-    echo "uv not found; normal memory operations can use the packaged bridge, but UI viewer fallback is unavailable" >&2
+    echo "uv not found; skipping Python package sync" >&2
   fi
 }
 
@@ -251,44 +243,6 @@ install_binary() {
     exit 1
   fi
   download_asset "$repo" "agent-memory-$platform" "$RUST_BIN"
-  if [[ "$BRIDGE_MODE" == "binary" || "$BRIDGE_MODE" == "auto" ]]; then
-    if ! download_asset "$repo" "agent-memory-lite-bridge-$platform" "$BRIDGE_BIN"; then
-      if [[ "$BRIDGE_MODE" == "binary" ]]; then
-        echo "failed to install packaged Lite bridge" >&2
-        exit 1
-      fi
-      echo "packaged Lite bridge unavailable; falling back to uv bridge" >&2
-      rm -f "$BRIDGE_BIN"
-    fi
-  fi
-}
-
-build_source_bridge() {
-  if [[ "$BRIDGE_MODE" == "none" || "$BRIDGE_MODE" == "uv" ]]; then
-    return
-  fi
-  if ! command -v uv >/dev/null 2>&1; then
-    if [[ "$BRIDGE_MODE" == "binary" ]]; then
-      echo "uv is required to build the packaged Lite bridge from source" >&2
-      exit 1
-    fi
-    return
-  fi
-  mkdir -p "$SKILL_ROOT/target/pyinstaller"
-  if ! uv run --project "$SKILL_ROOT" --with pyinstaller pyinstaller \
-    --onefile \
-    --name agent-memory-lite-bridge \
-    --distpath "$BIN_DIR" \
-    --workpath "$SKILL_ROOT/target/pyinstaller/build" \
-    --specpath "$SKILL_ROOT/target/pyinstaller" \
-    "$SKILL_ROOT/src/agent_memory/lite_bridge.py"; then
-    if [[ "$BRIDGE_MODE" == "binary" ]]; then
-      echo "failed to build packaged Lite bridge" >&2
-      exit 1
-    fi
-    echo "packaged Lite bridge build failed; falling back to uv bridge" >&2
-    rm -f "$BRIDGE_BIN"
-  fi
 }
 
 install_source() {
@@ -296,7 +250,6 @@ install_source() {
   cargo build --manifest-path "$SKILL_ROOT/Cargo.toml" --release
   cp "$SKILL_ROOT/target/release/agent-memory" "$RUST_BIN"
   chmod +x "$RUST_BIN"
-  build_source_bridge
 }
 
 choose_mode() {
@@ -329,9 +282,6 @@ install_qdrant
 install_qdrant_web_ui
 sync_uv
 "$RUST_BIN" --help >/dev/null
-if [[ -x "$BRIDGE_BIN" ]]; then
-  "$BRIDGE_BIN" --help >/dev/null
-fi
 if [[ -x "$QDRANT_BIN" ]]; then
   "$QDRANT_BIN" --version >/dev/null
 fi
@@ -346,8 +296,6 @@ cat > "$BIN_DIR/install-state.json" <<EOF
   "version": "$VERSION",
   "platform": "$(detect_platform)",
   "rust_binary": "$RUST_BIN",
-  "lite_bridge_binary": "$BRIDGE_BIN",
-  "lite_bridge_installed": $([[ -x "$BRIDGE_BIN" ]] && echo true || echo false),
   "qdrant_binary": "$QDRANT_BIN",
   "qdrant_installed": $([[ -x "$QDRANT_BIN" ]] && echo true || echo false),
   "qdrant_static_content_dir": "$QDRANT_STATIC_DIR",

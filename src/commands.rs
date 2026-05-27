@@ -18,17 +18,15 @@ use crate::cli::{
 };
 use crate::config::{
     load_runtime_config, load_user_config, logical_database_name, normalize_storage_for_runtime,
-    persist_storage_to_user_config, persist_user_config_if_exists, storage_for_backend,
-    write_runtime_config, write_user_config_template, BackendKind, RuntimeConfig, UserConfig,
+    persist_user_config_if_exists, write_runtime_config, write_user_config_template, RuntimeConfig,
+    UserConfig,
 };
 use crate::discovery::{
     active_user_config, discover, discover_root, infer_project_root_from_config_path,
     remove_agents_config_pointer, resolve_memory_root, runtime_root, write_agents_config_pointer,
 };
 use crate::models::{GatewayState, MemoryRecord};
-use crate::paths::{
-    absolutize, home_path, project_path, resolve_under_root, skill_root, HomePath, ProjectPath,
-};
+use crate::paths::{absolutize, home_path, project_path, skill_root, HomePath, ProjectPath};
 use crate::records::{
     delete_record, derive_keys, filtered_records, get_record, mark_accessed, read_records,
     record_value, summarize, upsert_record, validate_content,
@@ -39,11 +37,8 @@ use crate::service::{
     request_service_stop, request_service_worker, run_service_loop, service_status,
     spawn_service_daemon, wait_for_service_start, write_registry,
 };
-use crate::storage::{
-    ensure_backend, qdrant_server_status, read_records_from_backend, upsert_record_to_backend,
-};
+use crate::storage::{ensure_backend, qdrant_server_status};
 use crate::util::{now, parse_csv, safe_timestamp};
-use crate::worker::cmd_worker;
 use crate::{DEFAULT_COLLECTION, SCHEMA_VERSION};
 
 pub fn run() -> Result<()> {
@@ -57,10 +52,6 @@ pub fn run() -> Result<()> {
             dim,
             endpoint,
             collection,
-            backend,
-            remote_uri,
-            remote_token,
-            verify_remote,
             force,
             update_agents,
             start_service,
@@ -72,10 +63,6 @@ pub fn run() -> Result<()> {
             dim,
             endpoint,
             collection,
-            backend,
-            remote_uri,
-            remote_token,
-            verify_remote,
             force,
             update_agents,
             start_service,
@@ -84,10 +71,6 @@ pub fn run() -> Result<()> {
             target,
             config,
             install_scope,
-            backend,
-            remote_uri,
-            remote_token,
-            verify_remote,
             force_template,
             update_agents,
             init,
@@ -96,10 +79,6 @@ pub fn run() -> Result<()> {
             root_arg: cli.root.or(target),
             output: config,
             install_scope,
-            backend,
-            remote_uri,
-            remote_token,
-            verify_remote,
             force_template,
             update_agents,
             run_init: init,
@@ -124,26 +103,14 @@ pub fn run() -> Result<()> {
         Commands::SetupConfig {
             output,
             install_scope,
-            backend,
-            remote_uri,
             update_agents,
             force,
-        } => cmd_setup_config(
-            cli.root,
-            output,
-            install_scope,
-            backend,
-            remote_uri,
-            update_agents,
-            force,
-        )?,
+        } => cmd_setup_config(cli.root, output, install_scope, update_agents, force)?,
         Commands::AgentsHook { command } => match command {
             AgentsHookCommands::Install {
                 config,
                 install_scope,
-                backend,
-                remote_uri,
-            } => cmd_agents_hook_install(cli.root, config, install_scope, backend, remote_uri)?,
+            } => cmd_agents_hook_install(cli.root, config, install_scope)?,
             AgentsHookCommands::Remove => cmd_agents_hook_remove(cli.root)?,
         },
         Commands::Memory { command } => match command {
@@ -202,20 +169,6 @@ pub fn run() -> Result<()> {
                 json!({"ok": true, "cleared": dir})
             }
             MemoryCommands::Audit => cmd_audit(cli.root)?,
-            MemoryCommands::Migrate {
-                to_backend,
-                remote_uri,
-                remote_token,
-                new_instance,
-                verify_remote,
-            } => cmd_migrate(
-                cli.root,
-                to_backend,
-                remote_uri,
-                remote_token,
-                new_instance,
-                verify_remote,
-            )?,
             MemoryCommands::Dump { output } => cmd_dump(cli.root, output)?,
         },
         Commands::Service { command } => match command {
@@ -246,20 +199,7 @@ pub fn run() -> Result<()> {
                 retry_failed,
             } => cmd_service_worker(cli.root, limit, retry_failed)?,
             ServiceCommands::Ui { command } => match command {
-                UiCommands::Start {
-                    host,
-                    port,
-                    max_workers,
-                    stop_service,
-                    timeout_seconds,
-                } => cmd_ui_start(
-                    cli.root,
-                    host,
-                    port,
-                    max_workers,
-                    stop_service,
-                    timeout_seconds,
-                )?,
+                UiCommands::Start { host, port } => cmd_ui_start(cli.root, host, port)?,
                 UiCommands::Status => cmd_ui_status(cli.root)?,
                 UiCommands::Stop { timeout_seconds } => cmd_ui_stop(cli.root, timeout_seconds)?,
             },
@@ -281,13 +221,11 @@ include!("commands/remotes.rs");
 include!("commands/gateway.rs");
 include!("commands/http.rs");
 include!("commands/proxy.rs");
+include!("commands/ui_registry.rs");
 include!("commands/projects.rs");
 include!("commands/setup.rs");
 include!("commands/agents_hook.rs");
 include!("commands/memory.rs");
 include!("commands/service_commands.rs");
-include!("commands/migrate.rs");
-include!("commands/ui_milvus.rs");
 include!("commands/ui.rs");
-include!("commands/ui_helpers.rs");
 include!("commands/tests.rs");

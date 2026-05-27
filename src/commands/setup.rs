@@ -29,10 +29,6 @@ struct InitOptions {
     dim: Option<usize>,
     endpoint: Option<String>,
     collection: Option<String>,
-    backend: Option<BackendKind>,
-    remote_uri: Option<String>,
-    remote_token: Option<String>,
-    verify_remote: bool,
     force: bool,
     update_agents: bool,
     start_service: bool,
@@ -47,10 +43,6 @@ fn cmd_init(options: InitOptions) -> Result<Value> {
         dim,
         endpoint,
         collection,
-        backend,
-        remote_uri,
-        remote_token,
-        verify_remote,
         force,
         update_agents,
         start_service,
@@ -82,11 +74,7 @@ fn cmd_init(options: InitOptions) -> Result<Value> {
         )
     } else {
         let root = discover_root(root_arg.as_deref())?;
-        let mut user_config = UserConfig::default();
-        if let Some(backend) = backend {
-            user_config.storage =
-                storage_for_backend(backend, remote_uri.clone(), remote_token.clone(), true);
-        }
+        let user_config = UserConfig::default();
         (
             root.clone(),
             root.clone(),
@@ -108,16 +96,7 @@ fn cmd_init(options: InitOptions) -> Result<Value> {
         user_config.embedding.endpoint = endpoint;
     }
     if let Some(collection) = collection {
-        user_config.collection_name = collection.clone();
-        user_config.storage.milvus_remote.collection = collection;
-    }
-    if backend.is_some() || remote_uri.is_some() || remote_token.is_some() {
-        user_config.storage = storage_for_backend(
-            backend.unwrap_or(user_config.storage.backend),
-            remote_uri.or(user_config.storage.milvus_remote.uri.clone()),
-            remote_token.or(user_config.storage.milvus_remote.token.clone()),
-            false,
-        );
+        user_config.collection_name = collection;
     }
     apply_logical_database_defaults(&mut user_config, &project_root);
     if config_path.exists() {
@@ -138,7 +117,7 @@ fn cmd_init(options: InitOptions) -> Result<Value> {
         runtime.storage = user_config.storage.clone();
         runtime.allowed_memory_types = user_config.allowed_memory_types.clone();
         write_runtime_config(&root, &runtime)?;
-        ensure_backend(&root, &runtime, verify_remote)?;
+        ensure_backend(&root, &runtime)?;
         let agents_file = if update_agents {
             Some(write_agents_config_pointer(&project_root, &config_path)?)
         } else {
@@ -181,7 +160,7 @@ fn cmd_init(options: InitOptions) -> Result<Value> {
         storage: user_config.storage.clone(),
     };
     write_runtime_config(&root, &runtime)?;
-    ensure_backend(&root, &runtime, verify_remote)?;
+    ensure_backend(&root, &runtime)?;
     let agents_file = if update_agents {
         Some(write_agents_config_pointer(&project_root, &config_path)?)
     } else {
@@ -213,10 +192,6 @@ struct SetupOptions {
     root_arg: Option<PathBuf>,
     output: PathBuf,
     install_scope: String,
-    backend: BackendKind,
-    remote_uri: Option<String>,
-    remote_token: Option<String>,
-    verify_remote: bool,
     force_template: bool,
     update_agents: bool,
     run_init: bool,
@@ -228,10 +203,6 @@ fn cmd_setup(options: SetupOptions) -> Result<Value> {
         root_arg,
         output,
         install_scope,
-        backend,
-        remote_uri,
-        remote_token,
-        verify_remote,
         force_template,
         update_agents,
         run_init,
@@ -248,13 +219,7 @@ fn cmd_setup(options: SetupOptions) -> Result<Value> {
     let created_config = if output.exists() && !force_template {
         false
     } else {
-        write_user_config_template(
-            &output,
-            &install_scope,
-            backend,
-            remote_uri.clone(),
-            force_template,
-        )?;
+        write_user_config_template(&output, &install_scope, force_template)?;
         let mut user_config = load_user_config(&output)?;
         apply_logical_database_defaults(&mut user_config, &root);
         fs::write(&output, serde_yaml::to_string(&user_config)?)?;
@@ -274,10 +239,6 @@ fn cmd_setup(options: SetupOptions) -> Result<Value> {
             dim: None,
             endpoint: None,
             collection: None,
-            backend: Some(backend),
-            remote_uri,
-            remote_token,
-            verify_remote,
             force: false,
             update_agents,
             start_service,
@@ -317,8 +278,6 @@ fn cmd_setup_config(
     root_arg: Option<PathBuf>,
     output: PathBuf,
     install_scope: String,
-    backend: BackendKind,
-    remote_uri: Option<String>,
     update_agents: bool,
     force: bool,
 ) -> Result<Value> {
@@ -329,7 +288,7 @@ fn cmd_setup_config(
         root.join(output)
     };
     let output = preserve_existing_project_config(&root, output, force);
-    write_user_config_template(&output, &install_scope, backend, remote_uri, force)?;
+    write_user_config_template(&output, &install_scope, force)?;
     let mut user_config = load_user_config(&output)?;
     apply_logical_database_defaults(&mut user_config, &root);
     fs::write(&output, serde_yaml::to_string(&user_config)?)?;

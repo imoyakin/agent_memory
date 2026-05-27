@@ -9,11 +9,11 @@ Use these documents as the project map before making architectural, runtime, UI,
 - `README.md` — install, setup, service, gateway, and user-facing CLI behavior.
 - `SKILL.md` — installed-skill operating contract for agents.
 - `references/agent-usage.md` — agent usage policy, search/write rules, visual inspection, and global/project memory boundaries.
-- `references/configuration.md` — `memory.yaml`, runtime config, storage backends, Qdrant, and legacy Milvus details.
+- `references/configuration.md` — `memory.yaml`, runtime config, Qdrant storage, and service configuration.
 - `DESIGN/DESIGN.md` — design index and current public interface map.
 - `DESIGN/01-cli-and-workflows.md` — CLI flow and command contracts.
 - `DESIGN/02-configuration-and-discovery.md` — config, discovery, logical database naming, and AGENTS.md injection.
-- `DESIGN/03-storage-and-schema.md` — Qdrant schema, record payload, and legacy Milvus schema.
+- `DESIGN/03-storage-and-schema.md` — Qdrant schema and record payload.
 - `DESIGN/04-search-embedding-worker.md` — search, embeddings, scoring, and worker behavior.
 - `DESIGN/05-service-ui-scripts.md` — resident service, gateway main process, Qdrant dashboard proxy, removable-disk handling, and install scripts.
 

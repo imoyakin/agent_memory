@@ -1,10 +1,8 @@
 use anyhow::{bail, Result};
-use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-use crate::discovery::discover;
 use crate::paths::{project_path, ProjectPath};
 use crate::util::{new_uuid_string, uuid_hex};
 use crate::{

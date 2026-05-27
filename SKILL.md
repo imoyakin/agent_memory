@@ -2,7 +2,7 @@
 name: agent-memory
 description: Use agent-memory as a repository-installed memory skill for coding agents. Bootstrap `<skill-root>/bin/agent-memory` with the bundled install script when missing; discover `memory.yaml` from AGENTS.md, `.memory/`, `.agents/agent_memory/`, or repo root; initialize `.memory/`; run one resident service per project root; search advisory memory before history-sensitive work; add durable memories; and keep global installs limited to machine/user-preference memory.
 license: Apache-2.0
-compatibility: Binary install requires a supported GitHub Release asset for this platform. Source install requires Rust/Cargo. Local Qdrant storage requires a `qdrant` binary on PATH or `storage.qdrant.binary`; Docker is not used. The Python Lite bridge is legacy-only and can use a packaged platform binary or fall back to uv with Python 3.10+ and pymilvus[bulk_writer,milvus-lite].
+compatibility: Binary install requires a supported GitHub Release asset for this platform. Source install requires Rust/Cargo. Local Qdrant storage requires a `qdrant` binary on PATH or `storage.qdrant.binary`; Docker is not used.
 metadata:
   version: "0.1.0"
 allowed-tools: Bash
@@ -26,9 +26,7 @@ test -x <skill-root>/bin/agent-memory || <skill-root>/scripts/install-agent-memo
 
 When prompted, choose binary install to download release assets into `bin/`, or
 source install to build this checkout locally. Binary install downloads the Rust
-CLI and, when available for the platform, a packaged Python Lite bridge. Source
-install builds the Rust CLI with Cargo and can package the bridge with
-PyInstaller; otherwise the bridge falls back to `uv run`.
+CLI. Source install builds the Rust CLI with Cargo.
 
 The install script injects the managed Agent Memory description into the target
 repository's `AGENTS.md` by default and creates
@@ -39,7 +37,6 @@ installing from outside the repository that should receive the hook. Use
 The installed runtime entrypoints are:
 
 - `<skill-root>/bin/agent-memory`
-- `<skill-root>/bin/agent-memory-lite-bridge` when a packaged bridge is available
 
 Agents should use `<skill-root>/bin/agent-memory` when the absolute skill path is
 known. If only `agent-memory` is available on PATH, that is acceptable for user
@@ -163,23 +160,10 @@ database. Local Qdrant is started from the configured binary and stores points
 under `storage.qdrant.storage_path`. For configuration details, read
 `references/configuration.md`.
 
-Remote initialization:
-
-```bash
-agent-memory setup \
-  --backend milvus-remote \
-  --remote-uri http://localhost:19530 \
-  --remote-token root:Milvus \
-  --verify-remote \
-  --init
-```
-
 Each generated `memory.yaml` contains `storage.instance_uuid`. That UUID is used
-to derive local Qdrant and legacy Milvus Lite storage paths. The logical
-database name comes from the project directory name, or from the current
-computer user name for global installs. Qdrant uses that logical name as the
-collection name; remote Milvus uses it as the database and stores memories in a
-`memories` collection.
+to derive local Qdrant storage paths. The logical database name comes from the
+project directory name, or from the current computer user name for global
+installs. Qdrant uses that logical name as the collection name.
 
 ## Service Lifecycle
 
@@ -295,22 +279,12 @@ agent-memory service ui start
 ```
 
 For Qdrant configs, open the returned `ui.address`; it is the Qdrant official
-`/dashboard` UI served through the local agent-memory gateway. For legacy Milvus Lite configs, use
-`agent-memory service ui start --stop-service` and open the returned
-`attu.address` in Attu with an empty token. Check and stop the UI helper with:
+`/dashboard` UI served through the local agent-memory gateway. Check and stop
+the UI helper with:
 
 ```bash
 agent-memory service ui status
 agent-memory service ui stop
-```
-
-Migrate all records to another backend in one command:
-
-```bash
-agent-memory memory migrate \
-  --to-backend milvus-remote \
-  --remote-uri http://localhost:19530 \
-  --new-instance
 ```
 
 Delete stale or false memory only when evidence supports it or the user asks:

@@ -5,12 +5,8 @@ description = "Project-local vector memory tools for coding agents"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "pymilvus[bulk_writer,milvus-lite]>=2.5,<3",
   "pyyaml>=6,<7",
 ]
-
-[project.scripts]
-agent-memory-lite-bridge = "agent_memory.lite_bridge:main"
 
 [build-system]
 requires = ["uv_build>=0.8.0,<0.9.0"]

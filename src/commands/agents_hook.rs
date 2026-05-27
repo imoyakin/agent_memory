@@ -2,8 +2,6 @@ fn cmd_agents_hook_install(
     root_arg: Option<PathBuf>,
     output: PathBuf,
     install_scope: String,
-    backend: BackendKind,
-    remote_uri: Option<String>,
 ) -> Result<Value> {
     let root = discover_root(root_arg.as_deref())?;
     let output = if output.is_absolute() {
@@ -15,7 +13,7 @@ fn cmd_agents_hook_install(
     let created_config = if output.exists() {
         false
     } else {
-        write_user_config_template(&output, &install_scope, backend, remote_uri, false)?;
+        write_user_config_template(&output, &install_scope, false)?;
         let mut user_config = load_user_config(&output)?;
         apply_logical_database_defaults(&mut user_config, &root);
         fs::write(&output, serde_yaml::to_string(&user_config)?)?;

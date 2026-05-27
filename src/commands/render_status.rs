@@ -32,14 +32,11 @@ fn render_human(value: &Value) -> String {
     if value.get("remotes").is_some() {
         return render_gateway_remotes(value);
     }
-    if value.get("server").is_some() || value.get("attu").is_some() {
+    if value.get("server").is_some() || value.get("ui").is_some() {
         return render_ui(value);
     }
     if value.get("dump").is_some() {
         return format!("Dump written\n\n{}", key_value_table(value));
-    }
-    if value.get("records_migrated").is_some() {
-        return format!("Migration complete\n\n{}", key_value_table(value));
     }
     if value.get("stopped").is_some() {
         return render_stop_result(value);

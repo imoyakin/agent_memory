@@ -85,10 +85,6 @@ pub(crate) fn default_pid_interval() -> u64 {
     60
 }
 
-pub(crate) fn default_backend() -> BackendKind {
-    BackendKind::Qdrant
-}
-
 pub(crate) fn default_qdrant_uri() -> String {
     "http://127.0.0.1:6333".to_string()
 }
@@ -107,16 +103,4 @@ pub(crate) fn default_qdrant_binary() -> String {
         }
     }
     "qdrant".to_string()
-}
-
-pub(crate) fn default_lite_db_path() -> String {
-    ".memory/milvus/default.db".to_string()
-}
-
-pub(crate) fn default_bridge() -> String {
-    "python_process".to_string()
-}
-
-pub(crate) fn default_remote_database() -> String {
-    format!("agent_memory_{}", uuid_hex(&new_uuid_string()))
 }

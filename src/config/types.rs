@@ -156,36 +156,12 @@ impl Default for ServiceConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum BackendKind {
-    Qdrant,
-    MilvusLite,
-    MilvusRemote,
-}
-
-impl std::fmt::Display for BackendKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BackendKind::Qdrant => write!(f, "qdrant"),
-            BackendKind::MilvusLite => write!(f, "milvus_lite"),
-            BackendKind::MilvusRemote => write!(f, "milvus_remote"),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct StorageConfig {
     #[serde(default = "new_uuid_string")]
     pub(crate) instance_uuid: String,
-    #[serde(default = "default_backend")]
-    pub(crate) backend: BackendKind,
     #[serde(default)]
     pub(crate) qdrant: QdrantConfig,
-    #[serde(default)]
-    pub(crate) milvus_lite: MilvusLiteConfig,
-    #[serde(default)]
-    pub(crate) milvus_remote: MilvusRemoteConfig,
 }
 
 impl Default for StorageConfig {
@@ -193,10 +169,7 @@ impl Default for StorageConfig {
         let instance_uuid = new_uuid_string();
         Self {
             qdrant: QdrantConfig::for_uuid(&instance_uuid),
-            milvus_lite: MilvusLiteConfig::for_uuid(&instance_uuid),
-            milvus_remote: MilvusRemoteConfig::for_uuid(&instance_uuid, None),
             instance_uuid,
-            backend: BackendKind::Qdrant,
         }
     }
 }
@@ -232,61 +205,6 @@ impl Default for QdrantConfig {
             binary: default_qdrant_binary(),
             static_content_dir: None,
         }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct MilvusLiteConfig {
-    #[serde(default = "default_lite_db_path")]
-    pub(crate) db_path: String,
-    #[serde(default = "default_bridge")]
-    pub(crate) bridge: String,
-}
-
-impl MilvusLiteConfig {
-    fn for_uuid(instance_uuid: &str) -> Self {
-        Self {
-            db_path: format!(".memory/milvus/{}.db", uuid_hex(instance_uuid)),
-            bridge: "python_process".to_string(),
-        }
-    }
-}
-
-impl Default for MilvusLiteConfig {
-    fn default() -> Self {
-        Self {
-            db_path: default_lite_db_path(),
-            bridge: default_bridge(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct MilvusRemoteConfig {
-    #[serde(default)]
-    pub(crate) uri: Option<String>,
-    #[serde(default = "default_remote_database")]
-    pub(crate) database: String,
-    #[serde(default = "default_collection_name")]
-    pub(crate) collection: String,
-    #[serde(default)]
-    pub(crate) token: Option<String>,
-}
-
-impl MilvusRemoteConfig {
-    fn for_uuid(instance_uuid: &str, uri: Option<String>) -> Self {
-        Self {
-            uri,
-            database: format!("agent_memory_{}", uuid_hex(instance_uuid)),
-            collection: "memories".to_string(),
-            token: None,
-        }
-    }
-}
-
-impl Default for MilvusRemoteConfig {
-    fn default() -> Self {
-        Self::for_uuid(&new_uuid_string(), None)
     }
 }
 

@@ -1,4 +1,4 @@
-"""Python bridge helpers for agent-memory Milvus Lite access."""
+"""Python package marker for agent-memory tooling."""
 
 __all__ = ["__version__"]
 

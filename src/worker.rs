@@ -16,7 +16,7 @@ pub(crate) fn cmd_worker(
 ) -> Result<Value> {
     let root = runtime_root(root_arg)?;
     let config = load_runtime_config(&root)?;
-    ensure_backend(&root, &config, false)?;
+    ensure_backend(&root, &config)?;
 
     let mut processed = 0usize;
     let mut embedded = 0usize;

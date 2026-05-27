@@ -44,35 +44,17 @@ jobs:
           exit "$failed"
       - name: Build Rust binary
         run: cargo build --release
-      - name: Build Python Lite bridge binary
-        run: |
-          uv sync --locked
-          uv run --with pyinstaller pyinstaller \
-            --onefile \
-            --name agent-memory-lite-bridge \
-            --distpath dist \
-            --workpath target/pyinstaller/build \
-            --specpath target/pyinstaller \
-            src/agent_memory/lite_bridge.py
       - name: Stage release assets
         shell: bash
         run: |
           mkdir -p dist
           cp target/release/agent-memory "dist/agent-memory-${{ matrix.platform }}"
-          chmod +x "dist/agent-memory-${{ matrix.platform }}" "dist/agent-memory-lite-bridge"
-          mv "dist/agent-memory-lite-bridge" "dist/agent-memory-lite-bridge-${{ matrix.platform }}"
+          chmod +x "dist/agent-memory-${{ matrix.platform }}"
           (cd dist && shasum -a 256 "agent-memory-${{ matrix.platform }}" > "agent-memory-${{ matrix.platform }}.sha256")
-          (cd dist && shasum -a 256 "agent-memory-lite-bridge-${{ matrix.platform }}" > "agent-memory-lite-bridge-${{ matrix.platform }}.sha256")
       - name: Smoke test staged assets
         shell: bash
         run: |
           "dist/agent-memory-${{ matrix.platform }}" --help
-          "dist/agent-memory-lite-bridge-${{ matrix.platform }}" --help
-          tmp_db="$(mktemp -d)/lite.db"
-          "dist/agent-memory-lite-bridge-${{ matrix.platform }}" ensure \
-            --db "$tmp_db" \
-            --collection agent_memory \
-            --dim 4
       - name: Upload assets
         uses: softprops/action-gh-release@v2
         with:
@@ -80,5 +62,3 @@ jobs:
           files: |
             dist/agent-memory-${{ matrix.platform }}
             dist/agent-memory-${{ matrix.platform }}.sha256
-            dist/agent-memory-lite-bridge-${{ matrix.platform }}
-            dist/agent-memory-lite-bridge-${{ matrix.platform }}.sha256

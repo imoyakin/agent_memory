@@ -154,10 +154,10 @@ fn render_discovery(discovery: &Value) -> String {
             ("Source", value_text(&discovery["source"])),
             ("Install Scope", value_text(&discovery["install_scope"])),
             (
-                "Backend",
+                "Qdrant",
                 value_text(
                     &discovery
-                        .pointer("/storage/backend")
+                        .pointer("/storage/qdrant/uri")
                         .cloned()
                         .unwrap_or(Value::Null)
                 )
@@ -186,10 +186,10 @@ fn render_config_result(value: &Value, config: &Value) -> String {
                 )
             ),
             (
-                "Backend",
+                "Qdrant",
                 value_text(
                     &config
-                        .pointer("/storage/backend")
+                        .pointer("/storage/qdrant/uri")
                         .cloned()
                         .unwrap_or(Value::Null)
                 )
@@ -210,10 +210,10 @@ fn render_ui(value: &Value) -> String {
             ("Data Dir", value_text(&server["data_dir"])),
             ("Log", value_text(&server["log_path"])),
             (
-                "Attu",
+                "Viewer",
                 value_text(
                     &value
-                        .pointer("/attu/address")
+                        .pointer("/ui/address")
                         .cloned()
                         .unwrap_or(Value::Null)
                 )

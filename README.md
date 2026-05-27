@@ -8,8 +8,7 @@ CLI code, `references/`, and `assets/`.
 
 The operational CLI is the Rust `agent-memory` binary. Installed skills should
 use `bin/agent-memory` as the stable entrypoint. Local vector storage defaults
-to a Qdrant server started from the `qdrant` binary, not Docker. The Python
-package only remains for the legacy Milvus Lite bridge.
+to a Qdrant server started from the `qdrant` binary, not Docker.
 
 The storage and retrieval design is maintained in `DESIGN/`.
 
@@ -64,10 +63,9 @@ and target repository.
 
 The install script supports two install modes:
 
-- Binary install downloads `agent-memory-<platform>` and, when available,
-  `agent-memory-lite-bridge-<platform>` from GitHub Release assets into `bin/`.
-- Source install builds the Rust CLI locally with Cargo and can package the Lite
-  bridge locally, falling back to uv when packaging is unavailable.
+- Binary install downloads `agent-memory-<platform>` from GitHub Release assets
+  into `bin/`.
+- Source install builds the Rust CLI locally with Cargo.
 
 Both modes converge on `bin/agent-memory`. The script records installation
 metadata in `bin/install-state.json`, which is local and ignored by git.
@@ -82,24 +80,13 @@ discover`, search before history-sensitive work, and write durable memory when
 appropriate. Uninstall removes only the exact generated AGENTS text; if that
 marker block has been edited by a user, it is left untouched instead of deleting
 by marker range. Use `--config` to place the config at `.memory/memory.yaml` or
-root `memory.yaml` instead. Setup can still choose remote Milvus instead of
-local Qdrant with flags:
-
-```bash
-agent-memory setup \
-  --backend milvus-remote \
-  --remote-uri http://localhost:19530 \
-  --remote-token root:Milvus \
-  --verify-remote \
-  --init
-```
+root `memory.yaml` instead.
 
 Every generated config contains `storage.instance_uuid`. The UUID stays in local
-Qdrant and legacy Lite storage paths to avoid directory collisions. The logical
-database name is separate: project installs use the last directory name, and
-global installs use the current computer user name. Qdrant uses that logical
-name as the collection name; remote Milvus uses it as the database and stores
-records in a `memories` collection.
+Qdrant storage paths to avoid directory collisions. The logical database name is
+separate: project installs use the last directory name, and global installs use
+the current computer user name. Qdrant uses that logical name as the collection
+name.
 
 Discover the active config:
 
@@ -230,15 +217,6 @@ related memories marked with `associative_*` match reasons. Search results are
 advisory memory and should be checked against current user instructions,
 repository contents, and official documents.
 
-Migrate all existing records to a new backend in one command:
-
-```bash
-agent-memory memory migrate \
-  --to-backend milvus-remote \
-  --remote-uri http://localhost:19530 \
-  --new-instance
-```
-
 Dump records:
 
 ```bash
@@ -254,23 +232,7 @@ Visualization:
   Qdrant dashboard proxy URL.
 - For a gateway overview, run `agent-memory gateway start`, then inspect
   `agent-memory gateway projects` or `GET /api/projects`.
-- For remote Milvus or Milvus Standalone, use a Milvus GUI such as Attu to inspect the `memories` collection, scalar fields, and vectors. If strict open-source licensing is required, pin Attu to the open-source 2.5.x line; newer Attu releases changed licensing.
-- For local Milvus Lite, expose the Lite data directory as a local Milvus endpoint, then point Attu at that endpoint:
-
-```bash
-agent-memory service ui start --stop-service
-```
-
-The command returns an Attu address like `http://127.0.0.1:19531`, recommends
-the Attu project at `https://github.com/zilliztech/attu`, and writes server
-state/logs to `.memory/milvus-lite-server.json` and
-`.memory/milvus-lite-server.log`. Milvus Lite server exposes one data directory
-at a time; when another registered viewer already owns the same host/port,
-`service ui start` stops that viewer before binding the port. The returned
-server metadata includes a project-derived database label so Attu inspection is
-less ambiguous. While this server is running, the same Lite DB is locked for
-normal agent-memory writes and worker processing. Stop the viewer server before
-resuming the resident service:
+- Check and stop the Qdrant dashboard helper with:
 
 ```bash
 agent-memory service ui status

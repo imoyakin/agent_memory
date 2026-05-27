@@ -109,11 +109,7 @@ fn local_project_viewer_endpoint(
 
 fn qdrant_endpoint_for_root(root: &Path) -> Option<Value> {
     let config = load_runtime_config(root).ok()?;
-    if config.storage.backend == BackendKind::Qdrant {
-        Some(json!(config.storage.qdrant.uri))
-    } else {
-        None
-    }
+    Some(json!(config.storage.qdrant.uri))
 }
 
 fn active_viewer_for_root(viewers: &[Value], root: &str) -> Option<Value> {

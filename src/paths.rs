@@ -11,8 +11,6 @@ pub(crate) enum ProjectPath {
     ServiceLog,
     QdrantServerState,
     QdrantServerLog,
-    MilvusLiteServerState,
-    MilvusLiteServerLog,
 }
 
 impl ProjectPath {
@@ -25,8 +23,6 @@ impl ProjectPath {
             Self::ServiceLog => &[".memory", "service.log"],
             Self::QdrantServerState => &[".memory", "qdrant-server.json"],
             Self::QdrantServerLog => &[".memory", "qdrant-server.log"],
-            Self::MilvusLiteServerState => &[".memory", "milvus-lite-server.json"],
-            Self::MilvusLiteServerLog => &[".memory", "milvus-lite-server.log"],
         }
     }
 }
@@ -133,18 +129,6 @@ pub(crate) fn skill_root() -> Result<PathBuf> {
         }
     }
     Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
-}
-
-pub(crate) fn skill_bin_path(name: &str) -> Result<PathBuf> {
-    Ok(skill_root()?.join("bin").join(executable_name(name)))
-}
-
-pub(crate) fn executable_name(name: &str) -> String {
-    if cfg!(windows) {
-        format!("{name}.exe")
-    } else {
-        name.to_string()
-    }
 }
 
 pub(crate) fn home_root() -> PathBuf {

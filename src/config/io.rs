@@ -1,8 +1,6 @@
 pub(crate) fn write_user_config_template(
     path: &Path,
     install_scope: &str,
-    backend: BackendKind,
-    remote_uri: Option<String>,
     force: bool,
 ) -> Result<()> {
     if path.exists() && !force {
@@ -16,7 +14,7 @@ pub(crate) fn write_user_config_template(
         config.memory_root = "~".to_string();
         config.allowed_memory_types = vec!["environment".to_string(), "preference".to_string()];
     }
-    config.storage = storage_for_backend(backend, remote_uri, None, true);
+    config.storage = StorageConfig::default();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -43,34 +41,6 @@ pub(crate) fn persist_user_config_if_exists(path: &Path, config: &UserConfig) ->
     Ok(())
 }
 
-pub(crate) fn persist_storage_to_user_config(root: &Path, storage: &StorageConfig) -> Result<()> {
-    let Some(discovered) = discover(Some(root))? else {
-        return Ok(());
-    };
-    let mut config = load_user_config(&discovered.config_path)?;
-    config.storage = storage.clone();
-    fs::write(&discovered.config_path, serde_yaml::to_string(&config)?)?;
-    Ok(())
-}
-
-pub(crate) fn storage_for_backend(
-    backend: BackendKind,
-    remote_uri: Option<String>,
-    remote_token: Option<String>,
-    _new_instance: bool,
-) -> StorageConfig {
-    let instance_uuid = new_uuid_string();
-    let mut storage = StorageConfig {
-        instance_uuid: instance_uuid.clone(),
-        backend,
-        qdrant: QdrantConfig::for_uuid(&instance_uuid),
-        milvus_lite: MilvusLiteConfig::for_uuid(&instance_uuid),
-        milvus_remote: MilvusRemoteConfig::for_uuid(&instance_uuid, remote_uri),
-    };
-    storage.milvus_remote.token = remote_token;
-    storage
-}
-
 pub(crate) fn normalize_storage(storage: &mut StorageConfig) {
     if storage.instance_uuid.trim().is_empty() {
         storage.instance_uuid = new_uuid_string();
@@ -90,16 +60,6 @@ pub(crate) fn normalize_storage(storage: &mut StorageConfig) {
     ) {
         storage.qdrant.static_content_dir = None;
     }
-    if storage.milvus_lite.db_path.trim().is_empty() {
-        storage.milvus_lite = MilvusLiteConfig::for_uuid(&storage.instance_uuid);
-    }
-    if storage.milvus_remote.database.trim().is_empty() {
-        storage.milvus_remote.database =
-            format!("agent_memory_{}", uuid_hex(&storage.instance_uuid));
-    }
-    if storage.milvus_remote.collection.trim().is_empty() {
-        storage.milvus_remote.collection = "memories".to_string();
-    }
 }
 
 pub(crate) fn normalize_storage_for_runtime(
@@ -118,27 +78,6 @@ pub(crate) fn normalize_storage_for_runtime(
         || storage.qdrant.storage_path.trim().is_empty()
     {
         storage.qdrant.storage_path = format!(".memory/qdrant/{slug}-{uuid}");
-    }
-    let default_lite = format!(".memory/milvus/{uuid}.db");
-    let old_named_lite = format!(".memory/milvus/agent_memory-{uuid}.db");
-    if storage.milvus_lite.db_path == default_lite
-        || storage.milvus_lite.db_path.trim().is_empty()
-        || storage.milvus_lite.db_path == default_lite_db_path()
-        || storage.milvus_lite.db_path == old_named_lite
-    {
-        storage.milvus_lite.db_path = format!(".memory/milvus/{slug}-{uuid}.db");
-    }
-    let default_remote = format!("agent_memory_{uuid}");
-    if storage.milvus_remote.database == default_remote
-        || storage.milvus_remote.database.starts_with("agent_memory_")
-        || storage.milvus_remote.database.trim().is_empty()
-    {
-        storage.milvus_remote.database = slug;
-    }
-    if storage.milvus_remote.collection == DEFAULT_COLLECTION
-        || storage.milvus_remote.collection.trim().is_empty()
-    {
-        storage.milvus_remote.collection = "memories".to_string();
     }
 }
 

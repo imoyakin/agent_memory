@@ -139,20 +139,7 @@ SSH port forward yourself, then attach it locally:
 agent-memory gateway attach --name workbox --url http://127.0.0.1:19532 --token <token>
 ```
 
-For legacy local Milvus Lite, expose the configured Lite data directory as a
-temporary Milvus endpoint for Attu:
-
-```bash
-agent-memory --agent service ui start --stop-service
-```
-
-Use the returned `attu.address` in Attu with an empty token. The command also
-returns the recommended Attu project URL, `https://github.com/zilliztech/attu`.
-Attu cannot inspect multiple Milvus Lite data directories through one
-`milvus-lite server`; `service ui start` stops any other registered viewer on
-the same host/port before binding. While this server is running, do not run the
-normal resident service or worker against the same Lite DB. Stop the viewer
-server after inspection:
+Stop the Qdrant dashboard helper after inspection when it is no longer needed:
 
 ```bash
 agent-memory --agent service ui stop

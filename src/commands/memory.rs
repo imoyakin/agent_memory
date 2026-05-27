@@ -56,9 +56,27 @@ fn cmd_add(
         schema_version: SCHEMA_VERSION,
     }
     .with_summary();
-    ensure_backend(&root, &config, false)?;
+    ensure_backend(&root, &config)?;
     upsert_record(&root, &record, None)?;
     Ok(json!({"ok": true, "record": record_value(&record)}))
+}
+
+fn cmd_dump(root_arg: Option<PathBuf>, output: Option<PathBuf>) -> Result<Value> {
+    let root = runtime_root(root_arg)?;
+    let payload = json!({
+        "config": load_runtime_config(&root).ok(),
+        "records": read_records(&root)?.iter().map(record_value).collect::<Vec<_>>(),
+    });
+    let path = output.unwrap_or_else(|| {
+        project_path(&root, ProjectPath::MemoryDir)
+            .join("dumps")
+            .join(format!("memory-{}.json", safe_timestamp()))
+    });
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&path, serde_json::to_string_pretty(&payload)? + "\n")?;
+    Ok(json!({"ok": true, "dump": path}))
 }
 
 fn cmd_search(

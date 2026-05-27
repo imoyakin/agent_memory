@@ -126,9 +126,7 @@ fn local_qdrant_target(root_hash: &str) -> Result<Option<String>> {
             continue;
         }
         let config = load_runtime_config(&root)?;
-        if config.storage.backend == BackendKind::Qdrant {
-            return Ok(Some(config.storage.qdrant.uri));
-        }
+        return Ok(Some(config.storage.qdrant.uri));
     }
     Ok(None)
 }
