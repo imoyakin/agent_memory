@@ -69,10 +69,20 @@ pub(crate) fn mark_accessed(root: &Path, ids: Vec<String>) -> Result<()> {
         if target.contains(&record.uuid) {
             record.access_count += 1;
             record.last_accessed_at = Some(timestamp.clone());
-            upsert_record(root, record, None)?;
+            if let Err(error) = upsert_record(root, record, None) {
+                if is_lite_lock_error(&error) {
+                    continue;
+                }
+                return Err(error);
+            }
         }
     }
     Ok(())
+}
+
+fn is_lite_lock_error(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.contains("DataDirLockedError") || message.contains("another process holds the lock")
 }
 
 pub(crate) fn record_value(record: &MemoryRecord) -> Value {

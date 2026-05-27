@@ -53,7 +53,7 @@ pub(crate) enum Commands {
         config: PathBuf,
         #[arg(long, default_value = "project")]
         install_scope: String,
-        #[arg(long, value_enum, default_value_t = BackendKind::MilvusLite)]
+        #[arg(long, value_enum, default_value_t = BackendKind::Qdrant)]
         backend: BackendKind,
         #[arg(long)]
         remote_uri: Option<String>,
@@ -72,13 +72,18 @@ pub(crate) enum Commands {
     },
     #[command(about = "List running agent-memory processes")]
     Ps,
+    #[command(about = "Coordinate the local UI gateway leader")]
+    Gateway {
+        #[command(subcommand)]
+        command: GatewayCommands,
+    },
     #[command(hide = true)]
     SetupConfig {
         #[arg(long, default_value = ".agents/agent_memory/memory.yaml")]
         output: PathBuf,
         #[arg(long, default_value = "project")]
         install_scope: String,
-        #[arg(long, value_enum, default_value_t = BackendKind::MilvusLite)]
+        #[arg(long, value_enum, default_value_t = BackendKind::Qdrant)]
         backend: BackendKind,
         #[arg(long)]
         remote_uri: Option<String>,
@@ -86,6 +91,11 @@ pub(crate) enum Commands {
         update_agents: bool,
         #[arg(long)]
         force: bool,
+    },
+    #[command(hide = true)]
+    AgentsHook {
+        #[command(subcommand)]
+        command: AgentsHookCommands,
     },
     #[command(about = "Inspect and operate memory records")]
     Memory {
@@ -97,6 +107,63 @@ pub(crate) enum Commands {
         #[command(subcommand)]
         command: ServiceCommands,
     },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum GatewayCommands {
+    #[command(about = "Start the local UI gateway lease holder")]
+    Start {
+        #[arg(long, default_value_t = 15)]
+        lease_seconds: u64,
+        #[arg(long, default_value_t = 5)]
+        heartbeat_seconds: u64,
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        #[arg(long, default_value_t = 19531)]
+        port: u16,
+        #[arg(long, hide = true)]
+        foreground: bool,
+    },
+    #[command(about = "Show local UI gateway status and managed projects")]
+    Status,
+    #[command(about = "Stop the active local UI gateway lease holder")]
+    Stop {
+        #[arg(long, default_value_t = 5)]
+        timeout_seconds: u64,
+    },
+    #[command(about = "List projects visible to the local UI gateway")]
+    Projects,
+    #[command(about = "Attach a manually forwarded remote gateway")]
+    Attach {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        url: String,
+        #[arg(long)]
+        token: String,
+    },
+    #[command(about = "Detach a manually forwarded remote gateway")]
+    Detach {
+        #[arg(long)]
+        name: String,
+    },
+    #[command(about = "List attached remote gateways")]
+    Remotes,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum AgentsHookCommands {
+    Install {
+        #[arg(long, default_value = ".agents/agent_memory/memory.yaml")]
+        config: PathBuf,
+        #[arg(long, default_value = "project")]
+        install_scope: String,
+        #[arg(long, value_enum, default_value_t = BackendKind::Qdrant)]
+        backend: BackendKind,
+        #[arg(long)]
+        remote_uri: Option<String>,
+    },
+    Remove,
 }
 
 #[derive(Subcommand)]
@@ -154,7 +221,7 @@ pub(crate) enum MemoryCommands {
     },
     #[command(about = "Inspect memory and embedding health")]
     Audit,
-    #[command(about = "Migrate records to another Milvus backend")]
+    #[command(about = "Migrate records to another storage backend")]
     Migrate {
         #[arg(long, value_enum)]
         to_backend: BackendKind,
@@ -221,11 +288,11 @@ pub(crate) enum ServiceCommands {
 
 #[derive(Subcommand)]
 pub(crate) enum UiCommands {
-    #[command(about = "Expose local Milvus Lite on port 19530 for Attu")]
+    #[command(about = "Start the configured local storage UI")]
     Start {
         #[arg(long, default_value = "127.0.0.1")]
         host: String,
-        #[arg(long, default_value_t = 19530)]
+        #[arg(long, default_value_t = 19531)]
         port: u16,
         #[arg(long, default_value_t = 10)]
         max_workers: u16,
@@ -236,7 +303,7 @@ pub(crate) enum UiCommands {
     },
     #[command(about = "Show the local UI inspection endpoint status")]
     Status,
-    #[command(about = "Stop the local Milvus Lite UI inspection endpoint")]
+    #[command(about = "Stop the local storage UI inspection endpoint")]
     Stop {
         #[arg(long, default_value_t = 5)]
         timeout_seconds: u64,

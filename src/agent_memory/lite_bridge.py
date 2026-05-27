@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from agent_memory.lite_bridge_codec import record_from_entity
+
 PRIMARY_FIELD = "uuid"
 VECTOR_FIELD = "dense_vector"
 
@@ -54,11 +56,13 @@ def main(argv: list[str] | None = None) -> int:
     upsert.add_argument("--dim", required=True, type=int)
 
     list_records = sub.add_parser("list")
-    list_records.add_argument("--db", required=True)
+    list_records.add_argument("--db")
+    list_records.add_argument("--uri")
     list_records.add_argument("--collection", required=True)
 
     get = sub.add_parser("get")
-    get.add_argument("--db", required=True)
+    get.add_argument("--db")
+    get.add_argument("--uri")
     get.add_argument("--collection", required=True)
     get.add_argument("--id", required=True)
 
@@ -75,7 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     pending.add_argument("--no-retry-failed", action="store_true")
 
     search = sub.add_parser("search")
-    search.add_argument("--db", required=True)
+    search.add_argument("--db")
+    search.add_argument("--uri")
     search.add_argument("--collection", required=True)
     search.add_argument("--limit", required=True, type=int)
 
@@ -93,8 +98,8 @@ def main(argv: list[str] | None = None) -> int:
             print_json(
                 {
                     "ok": True,
-                    "records": list_records_from_collection(
-                        Path(args.db),
+                    "records": list_records_from_collection_uri(
+                        source_uri(args),
                         args.collection,
                     ),
                 }
@@ -103,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             print_json(
                 {
                     "ok": True,
-                    "record": get_record(Path(args.db), args.collection, args.id),
+                    "record": get_record_from_uri(source_uri(args), args.collection, args.id),
                 }
             )
         elif args.command == "delete":
@@ -123,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "ok": True,
                     "hits": search_vectors(
-                        Path(args.db),
+                        source_uri(args),
                         args.collection,
                         payload["vector"],
                         args.limit,
@@ -134,6 +139,13 @@ def main(argv: list[str] | None = None) -> int:
         print_json({"ok": False, "error": str(exc)}, stream=sys.stderr)
         return 1
     return 0
+
+
+def source_uri(args: argparse.Namespace) -> str:
+    raw = args.uri or args.db
+    if not raw:
+        raise ValueError("either --db or --uri is required")
+    return str(raw)
 
 
 def ensure_collection(db_path: Path, collection: str, dim: int) -> None:
@@ -213,9 +225,13 @@ def upsert_record(
 
 
 def list_records_from_collection(db_path: Path, collection: str) -> list[dict[str, Any]]:
+    return list_records_from_collection_uri(str(db_path), collection)
+
+
+def list_records_from_collection_uri(uri: str, collection: str) -> list[dict[str, Any]]:
     from pymilvus import MilvusClient
 
-    client = MilvusClient(uri=str(db_path))
+    client = MilvusClient(uri=uri)
     if not client.has_collection(collection_name=collection):
         return []
     client.load_collection(collection_name=collection)
@@ -228,9 +244,13 @@ def list_records_from_collection(db_path: Path, collection: str) -> list[dict[st
 
 
 def get_record(db_path: Path, collection: str, uuid: str) -> dict[str, Any] | None:
+    return get_record_from_uri(str(db_path), collection, uuid)
+
+
+def get_record_from_uri(uri: str, collection: str, uuid: str) -> dict[str, Any] | None:
     from pymilvus import MilvusClient
 
-    client = MilvusClient(uri=str(db_path))
+    client = MilvusClient(uri=uri)
     if not client.has_collection(collection_name=collection):
         return None
     client.load_collection(collection_name=collection)
@@ -275,14 +295,14 @@ def existing_vector(db_path: Path, collection: str, uuid: str) -> list[float] | 
 
 
 def search_vectors(
-    db_path: Path,
+    uri: str | Path,
     collection: str,
     vector: list[float],
     limit: int,
 ) -> list[dict[str, Any]]:
     from pymilvus import MilvusClient
 
-    client = MilvusClient(uri=str(db_path))
+    client = MilvusClient(uri=str(uri))
     if not client.has_collection(collection_name=collection):
         return []
     client.load_collection(collection_name=collection)
@@ -337,66 +357,6 @@ def entity_for_record(
         "reliability": float(reliability or 0.0),
         "dense_vector": vector,
     }
-
-
-def record_from_entity(entity: dict[str, Any]) -> dict[str, Any]:
-    updated_at = str(entity.get("updated_at") or "")
-    return {
-        "uuid": str(entity.get("uuid") or entity.get("memory_id") or ""),
-        "content": str(entity.get("content") or ""),
-        "keys": string_list(entity.get("keys")),
-        "summary": str(entity.get("summary") or ""),
-        "embedding_status": str(entity.get("embedding_status") or "pending"),
-        "embedding_error": optional_string(entity.get("embedding_error")),
-        "embedding_attempts": int(entity.get("embedding_attempts") or 0),
-        "memory_type": str(entity.get("memory_type") or "project"),
-        "scope": str(entity.get("scope") or "project"),
-        "root_path": str(entity.get("root_path") or ""),
-        "tags": string_list(entity.get("tags")),
-        "source_kind": str(entity.get("source_kind") or "agent_inferred"),
-        "source_ref": str(entity.get("source_ref") or ""),
-        "created_at": str(entity.get("created_at") or updated_at),
-        "updated_at": updated_at,
-        "last_accessed_at": optional_string(entity.get("last_accessed_at")),
-        "access_count": int(entity.get("access_count") or 0),
-        "conflict_count": int(entity.get("conflict_count") or 0),
-        "confidence": float(entity.get("confidence") or 0.0),
-        "verified_at": optional_string(entity.get("verified_at")),
-        "stale_after_days": optional_int(entity.get("stale_after_days")),
-        "embedding_provider": str(entity.get("embedding_provider") or ""),
-        "embedding_model": str(entity.get("embedding_model") or ""),
-        "embedding_dim": int(entity.get("embedding_dim") or 0),
-        "schema_version": int(entity.get("schema_version") or 1),
-    }
-
-
-def optional_string(value: Any) -> str | None:
-    if value is None or value == "":
-        return None
-    return str(value)
-
-
-def optional_int(value: Any) -> int | None:
-    if value is None:
-        return None
-    number = int(value)
-    if number < 0:
-        return None
-    return number
-
-
-def string_list(value: Any) -> list[str]:
-    if isinstance(value, list):
-        return [str(item) for item in value]
-    if not isinstance(value, str) or value == "":
-        return []
-    try:
-        decoded = json.loads(value)
-        if isinstance(decoded, list):
-            return [str(item) for item in decoded]
-    except json.JSONDecodeError:
-        pass
-    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def print_json(data: dict[str, Any], *, stream=sys.stdout) -> None:

@@ -2,7 +2,7 @@
 name: agent-memory
 description: Use agent-memory as a repository-installed memory skill for coding agents. Bootstrap `<skill-root>/bin/agent-memory` with the bundled install script when missing; discover `memory.yaml` from AGENTS.md, `.memory/`, `.agents/agent_memory/`, or repo root; initialize `.memory/`; run one resident service per project root; search advisory memory before history-sensitive work; add durable memories; and keep global installs limited to machine/user-preference memory.
 license: Apache-2.0
-compatibility: Binary install requires a supported GitHub Release asset for this platform. Source install requires Rust/Cargo. The Python Lite bridge can use a packaged platform binary or fall back to uv with Python 3.10+ and pymilvus[bulk_writer,milvus-lite].
+compatibility: Binary install requires a supported GitHub Release asset for this platform. Source install requires Rust/Cargo. Local Qdrant storage requires a `qdrant` binary on PATH or `storage.qdrant.binary`; Docker is not used. The Python Lite bridge is legacy-only and can use a packaged platform binary or fall back to uv with Python 3.10+ and pymilvus[bulk_writer,milvus-lite].
 metadata:
   version: "0.1.0"
 allowed-tools: Bash
@@ -29,6 +29,12 @@ source install to build this checkout locally. Binary install downloads the Rust
 CLI and, when available for the platform, a packaged Python Lite bridge. Source
 install builds the Rust CLI with Cargo and can package the bridge with
 PyInstaller; otherwise the bridge falls back to `uv run`.
+
+The install script injects the managed Agent Memory description into the target
+repository's `AGENTS.md` by default and creates
+`.agents/agent_memory/memory.yaml` if needed. Use `--target-root <repo>` when
+installing from outside the repository that should receive the hook. Use
+`--no-update-agents` only when the project must not be touched.
 
 The installed runtime entrypoints are:
 
@@ -64,11 +70,31 @@ To inspect active agent-memory processes on this computer:
 agent-memory --agent ps
 ```
 
-The output reads `~/.memory/processes.json`, refreshes entries over local IPC
-sockets, and returns each process workdir, mode, status, memory count, PID, IPC
-endpoint, and service metadata as JSON. Without `--agent`, the CLI prints
-human-readable tables. Global memory uses the user home root and stores runtime
-state under `~/.memory`.
+The output reports the local gateway main process, local memory services,
+attached remote gateways, and pruned stale endpoints. Unix/macOS enumerate
+runtime socket files; Windows uses `~/.memory/processes.json` as a named-pipe
+candidate index. IPC status is the only runtime authority for local memory
+services; endpoints whose IPC does not return an active service are removed
+before display. With `--agent`, the JSON shape is `main`, `memories`, `remotes`,
+and `pruned`.
+
+To coordinate one local UI gateway leader across agents:
+
+```bash
+agent-memory --agent gateway start
+agent-memory --agent gateway status
+```
+
+The gateway uses `~/.memory/ui-gateway.json` plus a short lease. If the leader
+process exits or the lease expires, another `gateway start` can take over. The
+gateway aggregates project and viewer status.
+
+The same gateway proxies Qdrant's official Web UI at
+`http://127.0.0.1:19531/view/<root_hash>/dashboard` by default. For
+Qdrant-backed projects, `service ui start` starts the local Qdrant binary if
+needed and returns that dashboard proxy URL. Direct Qdrant binaries require the
+Web UI static bundle; the install script places it in `bin/qdrant-static/`, and
+advanced installs may override it with `storage.qdrant.static_content_dir`.
 
 ## Terminal Interaction
 
@@ -113,7 +139,7 @@ runs `uv sync` when uv is available so the Lite bridge fallback and UI viewer
 remain usable. `init` refreshes the same managed block after runtime
 initialization so future agents can discover, search, and write memory without
 reading this `SKILL.md` first. By default it writes
-`.agents/agent_memory/memory.yaml` and uses local Milvus Lite; use `--config`,
+`.agents/agent_memory/memory.yaml` and uses local Qdrant; use `--config`,
 `--backend`, and `--remote-uri` to override that.
 
 Ask the user to edit `memory.yaml` when provider/model/endpoint are not already
@@ -130,11 +156,11 @@ Default local Ollama config:
 - dim: `4096`
 - endpoint: `http://localhost:11434`
 
-`--init` creates the target runtime `.memory/config.json`, active Milvus
+`--init` creates the target runtime `.memory/config.json`, active Qdrant
 backend, and managed AGENTS.md memory hook unless `--no-update-agents` is used.
-Memory records and embedding state are stored only in Milvus. Local Milvus Lite
-is accessed through the bundled Python bridge; remote Milvus uses the Rust CLI's
-remote backend. For configuration details, read
+Memory records and embedding state are stored only in the configured vector
+database. Local Qdrant is started from the configured binary and stores points
+under `storage.qdrant.storage_path`. For configuration details, read
 `references/configuration.md`.
 
 Remote initialization:
@@ -149,7 +175,11 @@ agent-memory setup \
 ```
 
 Each generated `memory.yaml` contains `storage.instance_uuid`. That UUID is used
-to derive the Milvus Lite DB path and remote Milvus database name.
+to derive local Qdrant and legacy Milvus Lite storage paths. The logical
+database name comes from the project directory name, or from the current
+computer user name for global installs. Qdrant uses that logical name as the
+collection name; remote Milvus uses it as the database and stores memories in a
+`memories` collection.
 
 ## Service Lifecycle
 
@@ -242,7 +272,7 @@ agent-memory --agent memory add \
   --tags "tag-a,tag-b"
 ```
 
-`memory add` inserts the record into Milvus immediately with
+`memory add` inserts the record into the configured vector database immediately with
 `embedding_status: pending`. It does not mean the vector index is ready. Process
 embeddings with:
 
@@ -258,18 +288,16 @@ Audit status:
 agent-memory memory audit
 ```
 
-Expose local Milvus Lite to Attu:
+Start the local storage inspection UI:
 
 ```bash
-agent-memory service ui start --stop-service
+agent-memory service ui start
 ```
 
-Use the returned `attu.address` in Attu, with an empty token. This starts a
-separate Milvus Lite server over the same local data directory, so it must not
-run at the same time as normal agent-memory service/worker writes. Attu cannot
-inspect multiple Milvus Lite data directories through one server; when another
-registered viewer already owns the same host/port, `service ui start`
-automatically stops it before binding the port. Check and stop it with:
+For Qdrant configs, open the returned `ui.address`; it is the Qdrant official
+`/dashboard` UI served through the local agent-memory gateway. For legacy Milvus Lite configs, use
+`agent-memory service ui start --stop-service` and open the returned
+`attu.address` in Attu with an empty token. Check and stop the UI helper with:
 
 ```bash
 agent-memory service ui status
@@ -304,9 +332,11 @@ Uninstall a project integration with:
 ```
 
 The uninstall script stops the project service, asks whether to dump memory,
-optionally clears `.memory/`, and removes only the managed AGENTS.md block
-between the `agent-memory:config` markers. Use `--remove-binaries` only when
-removing the skill-local `bin/` entrypoints too.
+optionally clears `.memory/`, and removes only the exact AGENTS.md text that the
+skill generated. If the marker block was edited, uninstall leaves `AGENTS.md`
+unchanged instead of deleting by marker range or replacing the file from a
+backup. Use `--remove-binaries` only when removing the skill-local `bin/`
+entrypoints too.
 
 ## References
 

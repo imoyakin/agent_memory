@@ -9,7 +9,7 @@ allowed_memory_types:
   - preference
   - project
   - research
-collection_name: agent_memory
+collection_name: example_project
 embedding:
   provider: ollama
   model: qwen3-embedding:8b
@@ -34,12 +34,17 @@ service:
 storage:
   # setup/init generates a fresh UUID and project slug. Do not reuse this example UUID directly.
   instance_uuid: 00000000-0000-4000-8000-000000000001
-  backend: milvus_lite
+  backend: qdrant
+  qdrant:
+    uri: http://127.0.0.1:6333
+    storage_path: .memory/qdrant/example_project-00000000000040008000000000000001
+    binary: qdrant
+    # static_content_dir: /absolute/path/to/qdrant-static
   milvus_lite:
     db_path: .memory/milvus/example_project-00000000000040008000000000000001.db
     bridge: python_process
   milvus_remote:
     uri: null
-    database: agent_memory_example_project_00000000000040008000000000000001
-    collection: agent_memory
+    database: example_project
+    collection: memories
     token: null

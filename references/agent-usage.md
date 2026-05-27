@@ -12,7 +12,10 @@ official documentation, and fresh tool output outrank stored memory.
 Before any memory operation, ensure `<skill-root>/bin/agent-memory` exists. If
 it is missing, run `<skill-root>/scripts/install-agent-memory.sh` and choose
 binary or source install. Binary install downloads release assets into `bin/`;
-source install builds the current checkout locally.
+source install builds the current checkout locally. The install script also
+injects the managed Agent Memory hook into the target repository's `AGENTS.md`
+by default and creates `.agents/agent_memory/memory.yaml` when needed; pass
+`--target-root <repo>` to target a different repository.
 
 Before search, confirm the active config:
 
@@ -29,6 +32,10 @@ the target project.
 Codex does not automatically execute setup from `SKILL.md`. The setup command is
 an explicit bootstrap step; after setup/init writes the AGENTS.md pointer and
 usage rules, future agents can discover the configured memory path.
+
+When uninstalling, use `<skill-root>/scripts/uninstall-agent-memory.sh
+--project-root <repo>`. It removes only the exact text generated for the managed
+AGENTS hook. A user-edited marker block is intentionally preserved.
 
 Search memory before asking the user when a task may depend on prior decisions,
 repo conventions, user preferences, known failures, domain knowledge, or
@@ -77,9 +84,9 @@ agent-memory --agent memory add \
   --tags "tag-a,tag-b"
 ```
 
-`memory add` means the record is persisted in Milvus with `embedding_status:
-pending`. It does not mean the vector index is ready. Run the worker when
-embedding should be processed:
+`memory add` means the record is persisted in the configured vector database
+with `embedding_status: pending`. It does not mean the vector index is ready.
+Run the worker when embedding should be processed:
 
 ```bash
 agent-memory --agent service worker --once
@@ -112,8 +119,28 @@ lifetime.
 
 ## Visual Inspection
 
-For local Milvus Lite, expose the configured Lite data directory as a temporary
-Milvus endpoint for Attu:
+For local Qdrant, start the storage UI helper and open the returned Qdrant
+dashboard proxy URL:
+
+```bash
+agent-memory --agent service ui start
+```
+
+The URL is served by the local gateway, for example
+`http://127.0.0.1:19531/view/<root_hash>/dashboard`, and proxies Qdrant's
+official `/dashboard` UI. If a direct Qdrant binary serves the API but
+`/dashboard` is unavailable, rerun the install script to provision
+`bin/qdrant-static/` or set `storage.qdrant.static_content_dir`.
+
+For SSH use, run `agent-memory --agent gateway status` on the remote, create the
+SSH port forward yourself, then attach it locally:
+
+```bash
+agent-memory gateway attach --name workbox --url http://127.0.0.1:19532 --token <token>
+```
+
+For legacy local Milvus Lite, expose the configured Lite data directory as a
+temporary Milvus endpoint for Attu:
 
 ```bash
 agent-memory --agent service ui start --stop-service

@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use regex::Regex;
+use regex::{NoExpand, Regex};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -114,13 +114,17 @@ pub(crate) fn extract_config_path(text: &str) -> Option<String> {
         .map(|item| item.as_str().trim_matches(['`', '\'', '"']).to_string())
 }
 
-pub(crate) fn write_agents_config_pointer(root: &Path, config_path: &Path) -> Result<PathBuf> {
-    let agents_file = root.join("AGENTS.md");
+pub(crate) fn agents_config_block(root: &Path, config_path: &Path) -> String {
     let relative = config_path.strip_prefix(root).unwrap_or(config_path);
-    let block = format!(
+    format!(
         "{AGENTS_MARKER_START}\nAgent Memory configuration: `{}`.\n\nAgent Memory magic word:\n- If the user writes `$agent_memory init`, run `agent-memory --agent init --start-service` for the current project, then report the service status.\n\nAgent Memory usage:\n- Before starting a non-trivial task, run `agent-memory --agent memory discover` to load the active memory configuration.\n- Search memory before asking the user when prior decisions, repository conventions, user preferences, known failures, domain knowledge, or research may matter: `agent-memory --agent memory search \"<query>\"`.\n- Treat memory as advisory. Current user instructions, live repository contents, official documentation, and fresh tool output override stored memory.\n- After making a durable, reusable, evidence-backed discovery, consider writing it with `agent-memory --agent memory add --content \"<memory>\" --type <type> --source-kind <kind> --source-ref <ref> --confidence <0..1> --keys \"<search keys>\"`.\n- Run embedding work with `agent-memory --agent service worker --once`, or keep the resident service available with `agent-memory --agent service start` and stop it with `agent-memory --agent service stop`.\n- Write project-specific memories to project scope and global/user-preference memories to global scope when a global memory config is available.\n- If only project memory is configured, write otherwise-global relevant memories to the project memory instead of dropping them.\n{AGENTS_MARKER_END}",
         relative.display()
-    );
+    )
+}
+
+pub(crate) fn write_agents_config_pointer(root: &Path, config_path: &Path) -> Result<PathBuf> {
+    let agents_file = root.join("AGENTS.md");
+    let block = agents_config_block(root, config_path);
     let updated = if agents_file.exists() {
         let text = fs::read_to_string(&agents_file)?;
         let marker = Regex::new(&format!(
@@ -129,7 +133,7 @@ pub(crate) fn write_agents_config_pointer(root: &Path, config_path: &Path) -> Re
             regex::escape(AGENTS_MARKER_END)
         ))?;
         if marker.is_match(&text) {
-            marker.replace(&text, block.as_str()).to_string()
+            marker.replace(&text, NoExpand(&block)).to_string()
         } else {
             format!("{}\n\n## Agent Memory\n\n{}\n", text.trim_end(), block)
         }
@@ -138,6 +142,39 @@ pub(crate) fn write_agents_config_pointer(root: &Path, config_path: &Path) -> Re
     };
     fs::write(&agents_file, updated)?;
     Ok(agents_file)
+}
+
+pub(crate) fn remove_agents_config_pointer(root: &Path) -> Result<(PathBuf, bool)> {
+    let agents_file = root.join("AGENTS.md");
+    if !agents_file.exists() {
+        return Ok((agents_file, false));
+    }
+    let Some(pointer) = read_agents_pointer(&agents_file)? else {
+        return Ok((agents_file, false));
+    };
+    let config_path = if Path::new(&pointer).is_absolute() {
+        PathBuf::from(pointer)
+    } else {
+        root.join(pointer)
+    };
+    let block = agents_config_block(root, &config_path);
+    let text = fs::read_to_string(&agents_file)?;
+    for injected in [
+        format!("\n\n## Agent Memory\n\n{block}\n"),
+        format!("## Agent Memory\n\n{block}\n"),
+        format!("\n\n{block}\n"),
+        format!("{block}\n"),
+        block,
+    ] {
+        if let Some(start) = text.find(&injected) {
+            let mut updated = String::new();
+            updated.push_str(&text[..start]);
+            updated.push_str(&text[start + injected.len()..]);
+            fs::write(&agents_file, updated)?;
+            return Ok((agents_file, true));
+        }
+    }
+    Ok((agents_file, false))
 }
 
 pub(crate) fn runtime_root(root_arg: Option<PathBuf>) -> Result<PathBuf> {
@@ -205,4 +242,66 @@ pub(crate) fn discover_root(root: Option<&Path>) -> Result<PathBuf> {
         }
     }
     Ok(std::env::current_dir()?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agents_pointer_preserves_magic_word_during_replacement() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let agents = root.join("AGENTS.md");
+        fs::write(
+            &agents,
+            format!(
+                "# Agent Guidelines\n\n{}\nold\n{}",
+                AGENTS_MARKER_START, AGENTS_MARKER_END
+            ),
+        )
+        .unwrap();
+        let config = root.join(".memory/memory.yaml");
+
+        write_agents_config_pointer(root, &config).unwrap();
+
+        let text = fs::read_to_string(agents).unwrap();
+        assert!(text.contains("`$agent_memory init`"));
+        assert!(text.contains("`.memory/memory.yaml`"));
+    }
+
+    #[test]
+    fn agents_pointer_removal_deletes_only_generated_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let agents = root.join("AGENTS.md");
+        fs::write(&agents, "# Agent Guidelines\n\nKeep this instruction.\n").unwrap();
+        let config = root.join(".agents/agent_memory/memory.yaml");
+
+        write_agents_config_pointer(root, &config).unwrap();
+        remove_agents_config_pointer(root).unwrap();
+
+        let text = fs::read_to_string(agents).unwrap();
+        assert_eq!(text, "# Agent Guidelines\n\nKeep this instruction.");
+    }
+
+    #[test]
+    fn agents_pointer_removal_leaves_modified_block_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let agents = root.join("AGENTS.md");
+        let config = root.join(".agents/agent_memory/memory.yaml");
+        let mut block = agents_config_block(root, &config);
+        block = block.replace(
+            "Agent Memory usage:",
+            "Agent Memory usage:\n- User-added instruction inside the marker block.",
+        );
+        let original = format!("# Agent Guidelines\n\n## Agent Memory\n\n{block}\n");
+        fs::write(&agents, &original).unwrap();
+
+        remove_agents_config_pointer(root).unwrap();
+
+        let text = fs::read_to_string(agents).unwrap();
+        assert_eq!(text, original);
+    }
 }

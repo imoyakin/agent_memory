@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BIN_DIR="$SKILL_ROOT/bin"
-RUST_BIN="$BIN_DIR/agent-memory"
+RUST_BIN="${AGENT_MEMORY_BIN:-$BIN_DIR/agent-memory}"
 PROJECT_ROOT="$PWD"
 REMOVE_BINARIES=0
 ASSUME_YES=0
@@ -14,9 +14,9 @@ usage() {
 Usage: scripts/uninstall-agent-memory.sh [options]
 
 Options:
-  --project-root <path>     Project root whose AGENTS.md block should be removed.
+  --project-root <path>     Project root whose generated AGENTS.md hook should be removed.
   --remove-binaries         Also remove bin/agent-memory and packaged bridge.
-  -y, --yes                 Do not prompt; keep memory and remove only the AGENTS.md block.
+  -y, --yes                 Do not prompt; keep memory and remove only the exact AGENTS hook.
   -h, --help                Show this help.
 EOF
 }
@@ -58,17 +58,16 @@ fi
 
 AGENTS_FILE="$PROJECT_ROOT/AGENTS.md"
 if [[ -f "$AGENTS_FILE" ]]; then
-  tmp="$(mktemp)"
-  awk '
-    /<!-- agent-memory:config:start -->/ { skip=1; next }
-    /<!-- agent-memory:config:end -->/ { skip=0; next }
-    skip != 1 { print }
-  ' "$AGENTS_FILE" > "$tmp"
-  mv "$tmp" "$AGENTS_FILE"
+  if [[ -x "$RUST_BIN" ]]; then
+    "$RUST_BIN" --root "$PROJECT_ROOT" agents-hook remove >/dev/null
+  else
+    echo "agent-memory binary not found; leaving AGENTS.md unchanged" >&2
+  fi
 fi
 
 if [[ "$REMOVE_BINARIES" -eq 1 ]]; then
-  rm -f "$BIN_DIR/agent-memory" "$BIN_DIR/agent-memory-lite-bridge" "$BIN_DIR/install-state.json"
+  rm -f "$BIN_DIR/agent-memory" "$BIN_DIR/agent-memory-lite-bridge" "$BIN_DIR/qdrant" "$BIN_DIR/install-state.json"
+  rm -rf "$BIN_DIR/qdrant-static"
 fi
 
 echo "agent-memory project uninstall complete for $PROJECT_ROOT"

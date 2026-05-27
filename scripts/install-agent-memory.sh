@@ -6,13 +6,19 @@ SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BIN_DIR="$SKILL_ROOT/bin"
 RUST_BIN="$BIN_DIR/agent-memory"
 BRIDGE_BIN="$BIN_DIR/agent-memory-lite-bridge"
+QDRANT_BIN="$BIN_DIR/qdrant"
+QDRANT_STATIC_DIR="$BIN_DIR/qdrant-static"
 
 MODE="auto"
 VERSION="latest"
 REPO="${AGENT_MEMORY_GITHUB_REPO:-}"
 TARGET_ROOT="$PWD"
 INIT_PROJECT=0
+UPDATE_AGENTS=1
 BRIDGE_MODE="auto"
+QDRANT_MODE="auto"
+QDRANT_VERSION="latest"
+QDRANT_WEB_UI_VERSION="${AGENT_MEMORY_QDRANT_WEB_UI_VERSION:-latest}"
 
 usage() {
   cat <<'EOF'
@@ -22,9 +28,14 @@ Options:
   --mode <binary|source|auto>       Install from GitHub Release or build locally.
   --repo <owner/repo>               GitHub repository for binary release assets.
   --version <tag|latest>            Release version to download. Default: latest.
-  --target-root <path>              Project root to initialize when --init-project is used.
+  --target-root <path>              Project root to receive AGENTS.md hook and optional init.
   --init-project                    Run setup --init --start-service after installation.
+  --no-update-agents                Do not inject or refresh the target AGENTS.md hook.
   --bridge <auto|binary|uv|none>    Install packaged Python Lite bridge. Default: auto.
+  --qdrant <auto|binary|system|none> Install Qdrant server binary. Default: auto.
+  --qdrant-version <tag|latest>      Qdrant release version. Default: latest.
+  --qdrant-web-ui-version <tag|latest>
+                                      Qdrant Web UI release version. Default: latest.
   -h, --help                        Show this help.
 EOF
 }
@@ -36,7 +47,11 @@ while [[ $# -gt 0 ]]; do
     --version) VERSION="${2:?}"; shift 2 ;;
     --target-root) TARGET_ROOT="${2:?}"; shift 2 ;;
     --init-project) INIT_PROJECT=1; shift ;;
+    --no-update-agents) UPDATE_AGENTS=0; shift ;;
     --bridge) BRIDGE_MODE="${2:?}"; shift 2 ;;
+    --qdrant) QDRANT_MODE="${2:?}"; shift 2 ;;
+    --qdrant-version) QDRANT_VERSION="${2:?}"; shift 2 ;;
+    --qdrant-web-ui-version) QDRANT_WEB_UI_VERSION="${2:?}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -44,6 +59,8 @@ done
 
 case "$MODE" in binary|source|auto) ;; *) echo "--mode must be binary, source, or auto" >&2; exit 2 ;; esac
 case "$BRIDGE_MODE" in auto|binary|uv|none) ;; *) echo "--bridge must be auto, binary, uv, or none" >&2; exit 2 ;; esac
+case "$QDRANT_MODE" in auto|binary|system|none) ;; *) echo "--qdrant must be auto, binary, system, or none" >&2; exit 2 ;; esac
+TARGET_ROOT="$(cd "$TARGET_ROOT" && pwd)"
 
 mkdir -p "$BIN_DIR"
 
@@ -58,6 +75,105 @@ detect_platform() {
     Linux:aarch64|Linux:arm64) echo "linux-arm64" ;;
     *) echo "unsupported platform: $os $arch" >&2; exit 1 ;;
   esac
+}
+
+qdrant_asset_name() {
+  local os arch
+  os="$(uname -s)"
+  arch="$(uname -m)"
+  case "$os:$arch" in
+    Darwin:arm64) echo "qdrant-aarch64-apple-darwin.tar.gz" ;;
+    Darwin:x86_64) echo "qdrant-x86_64-apple-darwin.tar.gz" ;;
+    Linux:x86_64) echo "qdrant-x86_64-unknown-linux-gnu.tar.gz" ;;
+    Linux:aarch64|Linux:arm64) echo "qdrant-aarch64-unknown-linux-musl.tar.gz" ;;
+    *) echo "unsupported Qdrant platform: $os $arch" >&2; exit 1 ;;
+  esac
+}
+
+qdrant_asset_url() {
+  local asset="$1"
+  if [[ "$QDRANT_VERSION" == "latest" ]]; then
+    echo "https://github.com/qdrant/qdrant/releases/latest/download/$asset"
+  else
+    echo "https://github.com/qdrant/qdrant/releases/download/$QDRANT_VERSION/$asset"
+  fi
+}
+
+qdrant_web_ui_asset_url() {
+  if [[ "$QDRANT_WEB_UI_VERSION" == "latest" ]]; then
+    echo "https://github.com/qdrant/qdrant-web-ui/releases/latest/download/dist-qdrant.zip"
+  else
+    echo "https://github.com/qdrant/qdrant-web-ui/releases/download/$QDRANT_WEB_UI_VERSION/dist-qdrant.zip"
+  fi
+}
+
+install_qdrant() {
+  case "$QDRANT_MODE" in
+    none) return ;;
+    system)
+      command -v qdrant >/dev/null 2>&1 || { echo "qdrant not found on PATH" >&2; exit 1; }
+      return
+      ;;
+  esac
+  local asset tmp_dir archive
+  asset="$(qdrant_asset_name)"
+  tmp_dir="$(mktemp -d)"
+  archive="$tmp_dir/$asset"
+  if ! curl -fL --retry 3 -o "$archive" "$(qdrant_asset_url "$asset")"; then
+    rm -rf "$tmp_dir"
+    if [[ "$QDRANT_MODE" == "binary" ]]; then
+      echo "failed to download Qdrant binary asset $asset" >&2
+      exit 1
+    fi
+    echo "Qdrant binary unavailable; install qdrant on PATH or set storage.qdrant.binary" >&2
+    return
+  fi
+  tar -xzf "$archive" -C "$tmp_dir"
+  if [[ ! -x "$tmp_dir/qdrant" ]]; then
+    rm -rf "$tmp_dir"
+    echo "Qdrant archive did not contain executable qdrant" >&2
+    exit 1
+  fi
+  mv "$tmp_dir/qdrant" "$QDRANT_BIN"
+  chmod +x "$QDRANT_BIN"
+  rm -rf "$tmp_dir"
+}
+
+install_qdrant_web_ui() {
+  case "$QDRANT_MODE" in
+    none) return ;;
+  esac
+  local tmp_dir archive extracted
+  tmp_dir="$(mktemp -d)"
+  archive="$tmp_dir/dist-qdrant.zip"
+  if ! curl -fL --retry 3 -o "$archive" "$(qdrant_web_ui_asset_url)"; then
+    rm -rf "$tmp_dir"
+    if [[ "$QDRANT_MODE" == "binary" ]]; then
+      echo "failed to download Qdrant Web UI static asset" >&2
+      exit 1
+    fi
+    echo "Qdrant Web UI static asset unavailable; /dashboard proxy will require storage.qdrant.static_content_dir" >&2
+    return
+  fi
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -q "$archive" -d "$tmp_dir"
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -m zipfile -e "$archive" "$tmp_dir"
+  else
+    rm -rf "$tmp_dir"
+    echo "unzip or python3 is required to extract Qdrant Web UI static asset" >&2
+    exit 1
+  fi
+  extracted="$tmp_dir/dist"
+  if [[ ! -f "$extracted/index.html" ]]; then
+    rm -rf "$tmp_dir"
+    echo "Qdrant Web UI archive did not contain dist/index.html" >&2
+    exit 1
+  fi
+  rm -rf "$QDRANT_STATIC_DIR"
+  mkdir -p "$QDRANT_STATIC_DIR"
+  cp -R "$extracted"/. "$QDRANT_STATIC_DIR"/
+  rm -rf "$tmp_dir"
 }
 
 infer_repo() {
@@ -189,9 +305,9 @@ choose_mode() {
     return
   fi
   if [[ -t 0 ]]; then
-    echo "Choose agent-memory install mode:" >&2
-    echo "1. Binary install: download release binaries into bin/" >&2
-    echo "2. Source install: build this checkout locally" >&2
+    echo "Choose how to install agent-memory:" >&2
+    echo "1. Binary install: download prebuilt binaries from GitHub Releases into bin/" >&2
+    echo "2. Source install: build this checkout locally with Cargo" >&2
     read -r -p "Install mode [1/2]: " answer
     case "$answer" in
       2|source) echo "source" ;;
@@ -209,10 +325,19 @@ case "$SELECTED_MODE" in
   *) echo "unknown install mode: $SELECTED_MODE" >&2; exit 1 ;;
 esac
 
+install_qdrant
+install_qdrant_web_ui
 sync_uv
 "$RUST_BIN" --help >/dev/null
 if [[ -x "$BRIDGE_BIN" ]]; then
   "$BRIDGE_BIN" --help >/dev/null
+fi
+if [[ -x "$QDRANT_BIN" ]]; then
+  "$QDRANT_BIN" --version >/dev/null
+fi
+
+if [[ "$UPDATE_AGENTS" -eq 1 ]]; then
+  "$RUST_BIN" --root "$TARGET_ROOT" agents-hook install >/dev/null
 fi
 
 cat > "$BIN_DIR/install-state.json" <<EOF
@@ -223,12 +348,21 @@ cat > "$BIN_DIR/install-state.json" <<EOF
   "rust_binary": "$RUST_BIN",
   "lite_bridge_binary": "$BRIDGE_BIN",
   "lite_bridge_installed": $([[ -x "$BRIDGE_BIN" ]] && echo true || echo false),
+  "qdrant_binary": "$QDRANT_BIN",
+  "qdrant_installed": $([[ -x "$QDRANT_BIN" ]] && echo true || echo false),
+  "qdrant_static_content_dir": "$QDRANT_STATIC_DIR",
+  "qdrant_web_ui_installed": $([[ -f "$QDRANT_STATIC_DIR/index.html" ]] && echo true || echo false),
+  "qdrant_web_ui_version": "$QDRANT_WEB_UI_VERSION",
   "installed_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 }
 EOF
 
 if [[ "$INIT_PROJECT" -eq 1 ]]; then
-  "$RUST_BIN" --root "$TARGET_ROOT" setup --init --start-service
+  setup_args=(--root "$TARGET_ROOT" setup --init --start-service)
+  if [[ "$UPDATE_AGENTS" -eq 0 ]]; then
+    setup_args+=(--no-update-agents)
+  fi
+  "$RUST_BIN" "${setup_args[@]}"
   "$RUST_BIN" --root "$TARGET_ROOT" --agent service status
 fi
 

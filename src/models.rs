@@ -114,6 +114,26 @@ pub(crate) struct ServiceState {
     pub(crate) ipc: Option<IpcEndpoint>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct GatewayState {
+    pub(crate) pid: u32,
+    pub(crate) started_at: String,
+    pub(crate) updated_at: String,
+    pub(crate) lease_expires_at: String,
+    pub(crate) lease_seconds: u64,
+    pub(crate) heartbeat_seconds: u64,
+    #[serde(default)]
+    pub(crate) host: Option<String>,
+    #[serde(default)]
+    pub(crate) port: Option<u16>,
+    #[serde(default)]
+    pub(crate) token: Option<String>,
+    #[serde(default)]
+    pub(crate) stopped_at: Option<String>,
+    #[serde(default)]
+    pub(crate) stop_requested_at: Option<String>,
+}
+
 pub(crate) fn pending_status() -> String {
     "pending".to_string()
 }

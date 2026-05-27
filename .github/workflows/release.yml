@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create or update, for example v0.1.0"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -24,6 +29,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v5
+      - name: Check source file length
+        shell: bash
+        run: |
+          max_lines=400
+          failed=0
+          while IFS= read -r file; do
+            lines="$(wc -l < "$file")"
+            if (( lines > max_lines )); then
+              echo "$file has $lines lines; split project-owned source files above $max_lines lines." >&2
+              failed=1
+            fi
+          done < <(git ls-files --cached --others --exclude-standard '*.rs' '*.py' '*.sh')
+          exit "$failed"
       - name: Build Rust binary
         run: cargo build --release
       - name: Build Python Lite bridge binary
@@ -57,8 +75,8 @@ jobs:
             --dim 4
       - name: Upload assets
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.tag }}
           files: |
             dist/agent-memory-${{ matrix.platform }}
             dist/agent-memory-${{ matrix.platform }}.sha256
