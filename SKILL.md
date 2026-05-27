@@ -131,13 +131,11 @@ agent-memory setup
 ```
 
 The Rust setup command creates `memory.yaml` and writes an AGENTS.md block with
-the config pointer, `--agent` commands, and operating rules. The install script
-runs `uv sync` when uv is available so the Lite bridge fallback and UI viewer
-remain usable. `init` refreshes the same managed block after runtime
-initialization so future agents can discover, search, and write memory without
-reading this `SKILL.md` first. By default it writes
-`.agents/agent_memory/memory.yaml` and uses local Qdrant; use `--config`,
-`--backend`, and `--remote-uri` to override that.
+the config pointer, `--agent` commands, and operating rules. `init` refreshes
+the same managed block after runtime initialization so future agents can
+discover, search, and write memory without reading this `SKILL.md` first. By
+default it writes `.agents/agent_memory/memory.yaml` and uses local Qdrant; use
+`--config` to override the config path.
 
 Ask the user to edit `memory.yaml` when provider/model/endpoint are not already
 known. Then initialize runtime state:

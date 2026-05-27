@@ -226,14 +226,6 @@ download_asset() {
   rm -f "$checksum_tmp"
 }
 
-sync_uv() {
-  if command -v uv >/dev/null 2>&1; then
-    uv sync --project "$SKILL_ROOT"
-  else
-    echo "uv not found; skipping Python package sync" >&2
-  fi
-}
-
 install_binary() {
   local platform repo
   platform="$(detect_platform)"
@@ -280,7 +272,6 @@ esac
 
 install_qdrant
 install_qdrant_web_ui
-sync_uv
 "$RUST_BIN" --help >/dev/null
 if [[ -x "$QDRANT_BIN" ]]; then
   "$QDRANT_BIN" --version >/dev/null

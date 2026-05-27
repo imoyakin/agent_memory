@@ -215,7 +215,6 @@ fn cmd_setup(options: SetupOptions) -> Result<Value> {
         root.join(output)
     };
     let output = preserve_existing_project_config(&root, output, force_template);
-    let sync = run_uv_sync()?;
     let created_config = if output.exists() && !force_template {
         false
     } else {
@@ -253,25 +252,9 @@ fn cmd_setup(options: SetupOptions) -> Result<Value> {
         "config_path": output,
         "created_config": created_config,
         "agents_file": agents_file,
-        "uv_sync": sync,
         "init": init_result,
         "next": if has_init_result { Value::Null } else { json!("agent-memory init") }
     }))
-}
-
-fn run_uv_sync() -> Result<Value> {
-    let status = Command::new("uv")
-        .arg("sync")
-        .arg("--project")
-        .arg(skill_root()?)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-    match status {
-        Ok(status) if status.success() => Ok(json!({"ok": true})),
-        Ok(status) => bail!("uv sync failed with status {status}"),
-        Err(error) => bail!("failed to run uv sync: {error}"),
-    }
 }
 
 fn cmd_setup_config(

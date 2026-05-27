@@ -11,9 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: astral-sh/setup-uv@v5
-      - name: Install Python dependencies
-        run: uv sync --locked
       - name: Check Rust formatting
         run: cargo fmt --check
       - name: Run tests

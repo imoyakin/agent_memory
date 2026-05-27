@@ -28,7 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: astral-sh/setup-uv@v5
       - name: Check source file length
         shell: bash
         run: |

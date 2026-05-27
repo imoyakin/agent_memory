@@ -17,8 +17,7 @@ install or setup commands just because `SKILL.md` exists or is loaded.
 
 `scripts/install-agent-memory.sh` installs the runtime entrypoint at
 `bin/agent-memory`. Binary mode downloads GitHub Release assets; source mode
-builds the Rust CLI locally. The script also runs `uv sync` when uv is
-available. By default it also creates the target repository's default
+builds the Rust CLI locally. By default it also creates the target repository's default
 `.agents/agent_memory/memory.yaml` when missing and injects the managed
 Agent Memory description into that repository's `AGENTS.md`; use
 `--target-root` to choose the repository and `--no-update-agents` to skip this

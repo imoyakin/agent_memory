@@ -26,7 +26,7 @@ use crate::discovery::{
     remove_agents_config_pointer, resolve_memory_root, runtime_root, write_agents_config_pointer,
 };
 use crate::models::{GatewayState, MemoryRecord};
-use crate::paths::{absolutize, home_path, project_path, skill_root, HomePath, ProjectPath};
+use crate::paths::{absolutize, home_path, project_path, HomePath, ProjectPath};
 use crate::records::{
     delete_record, derive_keys, filtered_records, get_record, mark_accessed, read_records,
     record_value, summarize, upsert_record, validate_content,
