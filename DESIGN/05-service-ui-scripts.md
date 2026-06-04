@@ -277,6 +277,11 @@ release 时不自动编译，只输出给 agent 的提示：先询问用户是�
 `agent_memory`，因为 Cargo rebuild 可能耗时。更新 release asset 不覆盖 target
 project 的 `memory.yaml`、`.memory/` 或 `.agents/agent_memory/`。
 
+release workflow 按 tag 自动构建 macOS arm64/x64、Linux x64 和 Windows x64。
+Windows asset 使用 `agent-memory-windows-x64.exe`，installer 在 Windows 下写入
+`bin/agent-memory.exe`。Cargo release profile 以包体积为优先：`opt-level = "z"`、
+LTO、单 codegen unit、strip symbols 和 `panic = "abort"`。
+
 `scripts/uninstall-agent-memory.sh` 调用 `agents-hook remove` 删除 hook。remove
 只删除与当前生成文本完全一致的注入片段；如果用户改过 marker block，脚本保持
 AGENTS.md 不变。脚本不通过 backup 覆盖，也不删除 AGENTS.md 文件。

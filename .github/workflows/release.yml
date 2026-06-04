@@ -26,6 +26,8 @@ jobs:
             platform: darwin-x64
           - os: ubuntu-latest
             platform: linux-x64
+          - os: windows-latest
+            platform: windows-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -49,9 +51,23 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp target/release/agent-memory "dist/agent-memory-${{ matrix.platform }}"
-          chmod +x "dist/agent-memory-${{ matrix.platform }}"
-          (cd dist && shasum -a 256 "agent-memory-${{ matrix.platform }}" > "agent-memory-${{ matrix.platform }}.sha256")
+          checksum() {
+            if command -v shasum >/dev/null 2>&1; then
+              shasum -a 256 "$1"
+            else
+              sha256sum "$1"
+            fi
+          }
+          if [[ "${{ matrix.platform }}" == "windows-x64" ]]; then
+            src="target/release/agent-memory.exe"
+            asset="agent-memory-windows-x64.exe"
+          else
+            src="target/release/agent-memory"
+            asset="agent-memory-${{ matrix.platform }}"
+          fi
+          cp "$src" "dist/$asset"
+          chmod +x "dist/$asset"
+          (cd dist && checksum "$asset" > "$asset.sha256")
           if [[ "${{ matrix.platform }}" == "linux-x64" ]]; then
             package_paths=(SKILL.md README.md Cargo.toml scripts assets references src)
             [[ -d DESIGN ]] && package_paths+=(DESIGN)
@@ -62,14 +78,27 @@ jobs:
       - name: Smoke test staged assets
         shell: bash
         run: |
-          "dist/agent-memory-${{ matrix.platform }}" --help
-      - name: Upload assets
+          if [[ "${{ matrix.platform }}" == "windows-x64" ]]; then
+            "dist/agent-memory-windows-x64.exe" --help
+          else
+            "dist/agent-memory-${{ matrix.platform }}" --help
+          fi
+      - name: Upload Unix assets
+        if: matrix.platform != 'windows-x64'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.tag }}
           files: |
             dist/agent-memory-${{ matrix.platform }}
             dist/agent-memory-${{ matrix.platform }}.sha256
+      - name: Upload Windows assets
+        if: matrix.platform == 'windows-x64'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.tag }}
+          files: |
+            dist/agent-memory-windows-x64.exe
+            dist/agent-memory-windows-x64.exe.sha256
       - name: Upload skill package
         if: matrix.platform == 'linux-x64'
         uses: softprops/action-gh-release@v2

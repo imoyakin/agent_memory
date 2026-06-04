@@ -4,8 +4,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BIN_DIR="$SKILL_ROOT/bin"
-RUST_BIN="$BIN_DIR/agent-memory"
-QDRANT_BIN="$BIN_DIR/qdrant"
+HOST_OS="$(uname -s)"
+case "$HOST_OS" in
+  MINGW*|MSYS*|CYGWIN*) EXE_SUFFIX=".exe" ;;
+  *) EXE_SUFFIX="" ;;
+esac
+RUST_BIN="$BIN_DIR/agent-memory$EXE_SUFFIX"
+QDRANT_BIN="$BIN_DIR/qdrant$EXE_SUFFIX"
 QDRANT_STATIC_DIR="$BIN_DIR/qdrant-static"
 INSTALL_STATE="$BIN_DIR/install-state.json"
 
@@ -73,7 +78,16 @@ detect_platform() {
     Darwin:x86_64) echo "darwin-x64" ;;
     Linux:x86_64) echo "linux-x64" ;;
     Linux:aarch64|Linux:arm64) echo "linux-arm64" ;;
+    MINGW*:x86_64|MSYS*:x86_64|CYGWIN*:x86_64) echo "windows-x64" ;;
     *) echo "unsupported platform: $os $arch" >&2; exit 1 ;;
+  esac
+}
+
+rust_asset_name() {
+  local platform="$1"
+  case "$platform" in
+    windows-x64) echo "agent-memory-windows-x64.exe" ;;
+    *) echo "agent-memory-$platform" ;;
   esac
 }
 
@@ -86,6 +100,7 @@ qdrant_asset_name() {
     Darwin:x86_64) echo "qdrant-x86_64-apple-darwin.tar.gz" ;;
     Linux:x86_64) echo "qdrant-x86_64-unknown-linux-gnu.tar.gz" ;;
     Linux:aarch64|Linux:arm64) echo "qdrant-aarch64-unknown-linux-musl.tar.gz" ;;
+    MINGW*:x86_64|MSYS*:x86_64|CYGWIN*:x86_64) echo "qdrant-x86_64-pc-windows-msvc.zip" ;;
     *) echo "unsupported Qdrant platform: $os $arch" >&2; exit 1 ;;
   esac
 }
@@ -115,7 +130,7 @@ install_qdrant() {
       return
       ;;
   esac
-  local asset tmp_dir archive
+  local asset tmp_dir archive executable
   asset="$(qdrant_asset_name)"
   tmp_dir="$(mktemp -d)"
   archive="$tmp_dir/$asset"
@@ -128,13 +143,27 @@ install_qdrant() {
     echo "Qdrant binary unavailable; install qdrant on PATH or set storage.qdrant.binary" >&2
     return
   fi
-  tar -xzf "$archive" -C "$tmp_dir"
-  if [[ ! -x "$tmp_dir/qdrant" ]]; then
+  if [[ "$asset" == *.zip ]]; then
+    if command -v unzip >/dev/null 2>&1; then
+      unzip -q "$archive" -d "$tmp_dir"
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 -m zipfile -e "$archive" "$tmp_dir"
+    else
+      rm -rf "$tmp_dir"
+      echo "unzip or python3 is required to extract Qdrant binary asset" >&2
+      exit 1
+    fi
+    executable="$(find "$tmp_dir" -type f -name 'qdrant.exe' | head -n 1)"
+  else
+    tar -xzf "$archive" -C "$tmp_dir"
+    executable="$tmp_dir/qdrant"
+  fi
+  if [[ -z "$executable" || ! -x "$executable" ]]; then
     rm -rf "$tmp_dir"
     echo "Qdrant archive did not contain executable qdrant" >&2
     exit 1
   fi
-  mv "$tmp_dir/qdrant" "$QDRANT_BIN"
+  mv "$executable" "$QDRANT_BIN"
   chmod +x "$QDRANT_BIN"
   rm -rf "$tmp_dir"
 }
@@ -239,13 +268,13 @@ install_binary() {
     echo "GitHub repo is required for binary install; pass --repo owner/repo or set AGENT_MEMORY_GITHUB_REPO" >&2
     exit 1
   fi
-  download_asset "$repo" "agent-memory-$platform" "$RUST_BIN"
+  download_asset "$repo" "$(rust_asset_name "$platform")" "$RUST_BIN"
 }
 
 install_source() {
   command -v cargo >/dev/null 2>&1 || { echo "cargo is required for source install" >&2; exit 1; }
   cargo build --manifest-path "$SKILL_ROOT/Cargo.toml" --release
-  cp "$SKILL_ROOT/target/release/agent-memory" "$RUST_BIN"
+  cp "$SKILL_ROOT/target/release/agent-memory$EXE_SUFFIX" "$RUST_BIN"
   chmod +x "$RUST_BIN"
 }
 

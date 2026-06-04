@@ -21,6 +21,11 @@ builds the Rust CLI locally. The selected mode, platform, repository, resolved
 release tag, and weekly update-check timestamp are recorded in
 `bin/install-state.json`.
 
+Release assets are built for macOS arm64/x64, Linux x64, and Windows x64.
+Windows installs use the `.exe` release asset and store it as
+`bin/agent-memory.exe`; Unix installs use `bin/agent-memory`. Release builds use
+Cargo's size-oriented release profile from this repository.
+
 Run `scripts/install-agent-memory.sh --check-updates` to check the configured
 GitHub repository's latest Release page at most once every seven days. Binary
 installs update silently by downloading the latest platform binary and the

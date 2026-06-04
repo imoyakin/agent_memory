@@ -2,9 +2,9 @@
 name: agent-memory
 description: Use agent-memory as a repository-installed memory skill for coding agents. Bootstrap `<skill-root>/bin/agent-memory` with the bundled install script when missing; discover `memory.yaml` from AGENTS.md, `.memory/`, `.agents/agent_memory/`, or repo root; initialize `.memory/`; run one resident service per project root; search advisory memory before history-sensitive work; add durable memories; and keep global installs limited to machine/user-preference memory.
 license: Apache-2.0
-compatibility: Binary install requires a supported GitHub Release asset for this platform. Source install requires Rust/Cargo. Local Qdrant storage requires a `qdrant` binary on PATH or `storage.qdrant.binary`; Docker is not used.
+compatibility: Binary install requires a supported GitHub Release asset for this platform; current release targets are macOS arm64/x64, Linux x64, and Windows x64. Source install requires Rust/Cargo. Local Qdrant storage requires a `qdrant` binary on PATH or `storage.qdrant.binary`; Docker is not used.
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
 allowed-tools: Bash
 ---
 

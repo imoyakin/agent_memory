@@ -207,6 +207,7 @@ The release workflow builds and uploads:
 - `agent-memory-darwin-arm64`
 - `agent-memory-darwin-x64`
 - `agent-memory-linux-x64`
+- `agent-memory-windows-x64.exe`
 - matching `.sha256` files
 - `agent-memory-skill.tar.gz`
 - `agent-memory-skill.tar.gz.sha256`
@@ -214,6 +215,10 @@ The release workflow builds and uploads:
 The release skill package contains the skill text, installer scripts, Rust
 source, assets, references, and design docs. It does not contain local
 `memory.yaml`, `.memory/`, `.agents/`, or `bin/` runtime state.
+
+Release binaries use the Cargo release profile in this repository, which favors
+small package size with `opt-level = "z"`, LTO, one codegen unit, stripped
+symbols, and `panic = "abort"`.
 
 ## Configuration
 
