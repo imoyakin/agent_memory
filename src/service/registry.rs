@@ -86,6 +86,58 @@ pub(crate) fn pid_exists(pid: u32) -> bool {
     pid_exists_platform(pid)
 }
 
+pub(crate) fn default_agent_pids() -> Vec<u32> {
+    #[cfg(unix)]
+    {
+        ancestor_pids(std::process::id())
+    }
+    #[cfg(not(unix))]
+    {
+        Vec::new()
+    }
+}
+
+#[cfg(unix)]
+fn ancestor_pids(pid: u32) -> Vec<u32> {
+    let mut result = Vec::new();
+    let mut current = pid;
+    for _ in 0..16 {
+        let Some(parent) = process_parent_pid(current) else {
+            break;
+        };
+        if parent <= 1 {
+            break;
+        }
+        if !result.contains(&parent) {
+            result.push(parent);
+        }
+        current = parent;
+    }
+    result
+}
+
+pub(crate) fn process_parent_pid(pid: u32) -> Option<u32> {
+    #[cfg(unix)]
+    {
+        let output = Command::new("ps")
+            .args(["-o", "ppid=", "-p", &pid.to_string()])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse::<u32>()
+            .ok()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        None
+    }
+}
+
 #[cfg(unix)]
 fn pid_exists_platform(pid: u32) -> bool {
     Command::new("kill")
@@ -124,6 +176,10 @@ pub(crate) fn sorted_pids(pids: HashSet<u32>) -> Vec<u32> {
     let mut pids: Vec<_> = pids.into_iter().filter(|pid| *pid > 0).collect();
     pids.sort_unstable();
     pids
+}
+
+fn service_lost_all_tracked_agents(previous: &[u32], live: &[u32]) -> bool {
+    !previous.is_empty() && live.is_empty()
 }
 
 pub(crate) fn sleep_until_stop(stop: &AtomicBool, duration: Duration) {

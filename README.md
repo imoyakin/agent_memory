@@ -8,7 +8,8 @@ CLI code, `references/`, and `assets/`.
 
 The operational CLI is the Rust `agent-memory` binary. Installed skills should
 use `bin/agent-memory` as the stable entrypoint. Local vector storage defaults
-to a Qdrant server started from the `qdrant` binary, not Docker.
+to a Qdrant server started from the `qdrant` binary by the resident
+`agent-memory` service, not Docker.
 
 The storage and retrieval design is maintained in `DESIGN/`.
 
@@ -54,7 +55,7 @@ Initialize a project:
 ```bash
 bin/agent-memory setup
 # edit memory.yaml
-bin/agent-memory setup --init
+bin/agent-memory init --start-service
 ```
 
 Codex does not automatically run this setup from `SKILL.md`; binary bootstrap
@@ -69,9 +70,19 @@ The install script supports two install modes:
 
 Both modes converge on `bin/agent-memory`. The script records installation
 metadata in `bin/install-state.json`, which is local and ignored by git.
+Use `scripts/install-agent-memory.sh --check-updates` from the skill root to
+check GitHub Releases at most once per week. Binary installs update silently by
+replacing the installed binary and refreshing release-packaged skill files.
+Source installs report the available update and ask the agent to confirm with
+the user before spending time rebuilding with Cargo. Update checks and release
+package refreshes do not overwrite the target repository's `memory.yaml`,
+`.memory/`, or `.agents/agent_memory/` config.
 When Qdrant support is enabled, the script also installs the Qdrant binary and
 the official Qdrant Web UI static bundle under `bin/qdrant-static/` so
 `/dashboard` works without Docker.
+
+GitHub Releases publish `agent-memory-<platform>` binaries, matching `.sha256`
+files, and `agent-memory-skill.tar.gz` for release-packaged skill updates.
 
 By default setup writes `.agents/agent_memory/memory.yaml` and records that path
 plus memory operating rules in `AGENTS.md`. `init` also refreshes the managed
@@ -139,11 +150,12 @@ registries. If the gateway process exits or the lease expires, another
 `gateway start` is the local main process. It serves JSON status APIs and
 proxies Qdrant's official Web UI under
 `http://127.0.0.1:19531/view/<root_hash>/dashboard`. For Qdrant projects,
-`agent-memory service ui start` starts the Qdrant binary if needed, starts or
-reuses the gateway, and returns that proxied dashboard URL. The gateway no
-longer serves a custom memory-card UI. Direct Qdrant binaries need Web UI
-static files; the install script provisions them at `bin/qdrant-static/`, or
-you can set `storage.qdrant.static_content_dir` to an existing static bundle.
+`agent-memory service ui start` first ensures the resident service is active,
+then uses that service-owned Qdrant process, starts or reuses the gateway, and
+returns that proxied dashboard URL. The gateway no longer serves a custom
+memory-card UI. Direct Qdrant binaries need Web UI static files; the install
+script provisions them at `bin/qdrant-static/`, or you can set
+`storage.qdrant.static_content_dir` to an existing static bundle.
 
 Remote SSH use is explicit pairing. On the remote host, run
 `agent-memory --agent gateway status` and use the returned `attach` object. Then
@@ -160,6 +172,9 @@ Attached remote projects are exposed through local URLs such as
 tunnels and does not initiate callbacks from the remote host.
 
 Setup/init prepares local files only unless `init --start-service` is used.
+Qdrant is started only by the resident `agent-memory` service. If the configured
+Qdrant endpoint is already occupied by a process that is not parented by the
+service for this root, startup fails instead of silently reusing that database.
 
 Start the resident daemon service for the project root:
 
@@ -168,14 +183,15 @@ agent-memory service start
 ```
 
 `service start` returns after the daemon is active. The OS process is named
-`agent-memory` and detaches from the invoking shell/session. The service stays
-running until explicitly stopped:
+`agent-memory`; Qdrant remains its direct child process. The service tracks the
+agent or ancestor process that started it and exits when all tracked agents are
+gone, or when explicitly stopped:
 
 ```bash
 agent-memory service stop
 ```
 
-Agents can optionally register their live PID for status visibility:
+Agents can register additional live PIDs for status and lifetime tracking:
 
 ```bash
 agent-memory service register --agent-pid "$AGENT_PID"
@@ -183,8 +199,8 @@ agent-memory service register --agent-pid "$AGENT_PID"
 
 Only one service runs per project root. In global mode, multiple agent PIDs can
 register with the same global service; registered PIDs are pruned when they
-exit, but they do not control the daemon lifetime. Global mode only allows
-`preference` and `environment` memories.
+exit, and the service stops once all tracked agents are gone. Global mode only
+allows `preference` and `environment` memories.
 
 Add a memory:
 

@@ -1,6 +1,7 @@
 fn cmd_ui_start(root_arg: Option<PathBuf>, host: String, port: u16) -> Result<Value> {
     let root = runtime_root(root_arg.clone())?;
     let config = load_runtime_config(&root)?;
+    let service = cmd_serve(root_arg.clone(), None, Vec::new(), None, None, false, false)?;
     ensure_backend(&root, &config)?;
     let server = qdrant_server_status(&root, &config.storage.qdrant)?;
     if server.get("dashboard_available").and_then(Value::as_bool) != Some(true) {
@@ -32,6 +33,7 @@ fn cmd_ui_start(root_arg: Option<PathBuf>, host: String, port: u16) -> Result<Va
     Ok(json!({
         "ok": true,
         "server": server,
+        "service_start": service,
         "gateway": gateway.get("gateway").cloned().unwrap_or(Value::Null),
         "projects": projects,
         "ui": {

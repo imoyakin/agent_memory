@@ -7,6 +7,7 @@ BIN_DIR="$SKILL_ROOT/bin"
 RUST_BIN="$BIN_DIR/agent-memory"
 QDRANT_BIN="$BIN_DIR/qdrant"
 QDRANT_STATIC_DIR="$BIN_DIR/qdrant-static"
+INSTALL_STATE="$BIN_DIR/install-state.json"
 
 MODE="auto"
 VERSION="latest"
@@ -14,9 +15,11 @@ REPO="${AGENT_MEMORY_GITHUB_REPO:-}"
 TARGET_ROOT="$PWD"
 INIT_PROJECT=0
 UPDATE_AGENTS=1
+CHECK_UPDATES=0
 QDRANT_MODE="auto"
 QDRANT_VERSION="latest"
 QDRANT_WEB_UI_VERSION="${AGENT_MEMORY_QDRANT_WEB_UI_VERSION:-latest}"
+UPDATE_INTERVAL_SECONDS=$((7 * 24 * 60 * 60))
 
 usage() {
   cat <<'EOF'
@@ -29,6 +32,7 @@ Options:
   --target-root <path>              Project root to receive AGENTS.md hook and optional init.
   --init-project                    Run setup --init --start-service after installation.
   --no-update-agents                Do not inject or refresh the target AGENTS.md hook.
+  --check-updates                   Check GitHub Releases at most weekly and update when safe.
   --qdrant <auto|binary|system|none> Install Qdrant server binary. Default: auto.
   --qdrant-version <tag|latest>      Qdrant release version. Default: latest.
   --qdrant-web-ui-version <tag|latest>
@@ -45,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --target-root) TARGET_ROOT="${2:?}"; shift 2 ;;
     --init-project) INIT_PROJECT=1; shift ;;
     --no-update-agents) UPDATE_AGENTS=0; shift ;;
+    --check-updates) CHECK_UPDATES=1; shift ;;
     --qdrant) QDRANT_MODE="${2:?}"; shift 2 ;;
     --qdrant-version) QDRANT_VERSION="${2:?}"; shift 2 ;;
     --qdrant-web-ui-version) QDRANT_WEB_UI_VERSION="${2:?}"; shift 2 ;;
@@ -263,7 +268,15 @@ choose_mode() {
   fi
 }
 
+. "$SCRIPT_DIR/update-agent-memory.sh"
+
+if [[ "$CHECK_UPDATES" -eq 1 && -x "$RUST_BIN" && -f "$INSTALL_STATE" ]]; then
+  check_updates
+  exit 0
+fi
+
 SELECTED_MODE="$(choose_mode)"
+
 case "$SELECTED_MODE" in
   binary) install_binary ;;
   source) install_source ;;
@@ -281,20 +294,9 @@ if [[ "$UPDATE_AGENTS" -eq 1 ]]; then
   "$RUST_BIN" --root "$TARGET_ROOT" agents-hook install >/dev/null
 fi
 
-cat > "$BIN_DIR/install-state.json" <<EOF
-{
-  "install_mode": "$SELECTED_MODE",
-  "version": "$VERSION",
-  "platform": "$(detect_platform)",
-  "rust_binary": "$RUST_BIN",
-  "qdrant_binary": "$QDRANT_BIN",
-  "qdrant_installed": $([[ -x "$QDRANT_BIN" ]] && echo true || echo false),
-  "qdrant_static_content_dir": "$QDRANT_STATIC_DIR",
-  "qdrant_web_ui_installed": $([[ -f "$QDRANT_STATIC_DIR/index.html" ]] && echo true || echo false),
-  "qdrant_web_ui_version": "$QDRANT_WEB_UI_VERSION",
-  "installed_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-}
-EOF
+INSTALL_REPO="$(infer_repo)"
+RESOLVED_VERSION="$(resolve_version "$INSTALL_REPO")"
+write_install_state "$SELECTED_MODE" "$INSTALL_REPO" "$RESOLVED_VERSION"
 
 if [[ "$INIT_PROJECT" -eq 1 ]]; then
   setup_args=(--root "$TARGET_ROOT" setup --init --start-service)

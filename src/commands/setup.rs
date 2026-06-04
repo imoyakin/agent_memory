@@ -117,7 +117,9 @@ fn cmd_init(options: InitOptions) -> Result<Value> {
         runtime.storage = user_config.storage.clone();
         runtime.allowed_memory_types = user_config.allowed_memory_types.clone();
         write_runtime_config(&root, &runtime)?;
-        ensure_backend(&root, &runtime)?;
+        if !start_service {
+            ensure_backend(&root, &runtime)?;
+        }
         let agents_file = if update_agents {
             Some(write_agents_config_pointer(&project_root, &config_path)?)
         } else {
@@ -160,7 +162,9 @@ fn cmd_init(options: InitOptions) -> Result<Value> {
         storage: user_config.storage.clone(),
     };
     write_runtime_config(&root, &runtime)?;
-    ensure_backend(&root, &runtime)?;
+    if !start_service {
+        ensure_backend(&root, &runtime)?;
+    }
     let agents_file = if update_agents {
         Some(write_agents_config_pointer(&project_root, &config_path)?)
     } else {
@@ -316,7 +320,7 @@ fn cmd_discover(root_arg: Option<PathBuf>) -> Result<Value> {
             "discovery": {
                 "found": false,
                 "project_root": root,
-                "guidance": "No memory.yaml or .memory/ was found. Run `agent-memory setup`, edit memory.yaml, then run `agent-memory setup --init`."
+                "guidance": "No memory.yaml or .memory/ was found. Run `agent-memory setup`, edit memory.yaml, then run `agent-memory init --start-service`."
             }
         }))
     }

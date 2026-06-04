@@ -45,4 +45,12 @@ mod tests {
             &state
         ));
     }
+
+    #[test]
+    fn qdrant_start_requires_service_supervisor_context() {
+        assert!(!qdrant_start_allowed_from_env(None));
+        assert!(!qdrant_start_allowed_from_env(Some("")));
+        assert!(!qdrant_start_allowed_from_env(Some("cli")));
+        assert!(qdrant_start_allowed_from_env(Some("service")));
+    }
 }

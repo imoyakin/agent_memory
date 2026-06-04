@@ -19,4 +19,11 @@ mod tests {
         assert!(!removable_storage_should_stop(2));
         assert!(removable_storage_should_stop(3));
     }
+
+    #[test]
+    fn tracked_agent_loss_only_stops_when_all_known_agents_are_gone() {
+        assert!(!service_lost_all_tracked_agents(&[], &[]));
+        assert!(!service_lost_all_tracked_agents(&[10, 20], &[20]));
+        assert!(service_lost_all_tracked_agents(&[10, 20], &[]));
+    }
 }

@@ -4,20 +4,46 @@ pub(crate) fn ensure_qdrant_server(root: &Path, config: &QdrantConfig) -> Result
     if qdrant_get(config, "/collections").is_ok() {
         if let Some(state) = read_qdrant_server_state(root)? {
             let pid = state.get("pid").and_then(Value::as_u64).unwrap_or(0) as u32;
-            let owned = crate::service::pid_exists(pid);
-            if owned && qdrant_state_requires_restart(&storage_path, config, &state) {
+            let alive = crate::service::pid_exists(pid);
+            let supervised = alive && qdrant_process_is_supervised(root, pid);
+            if alive && !supervised {
+                if !qdrant_start_allowed() {
+                    bail!(
+                        "Qdrant at {} is not parented by an agent-memory service for {}",
+                        config.uri,
+                        root.display()
+                    );
+                }
                 terminate_qdrant_process(pid)?;
                 wait_for_qdrant_stop(config)?;
                 wait_for_qdrant_process_exit(pid)?;
-            } else if qdrant_dashboard_available(config) || static_content_dir.is_none() || !owned {
+            } else if alive && qdrant_state_requires_restart(&storage_path, config, &state) {
+                if !qdrant_start_allowed() {
+                    bail!(
+                        "Qdrant at {} needs restart for {}, but this command is not the service supervisor",
+                        config.uri,
+                        root.display()
+                    );
+                }
+                terminate_qdrant_process(pid)?;
+                wait_for_qdrant_stop(config)?;
+                wait_for_qdrant_process_exit(pid)?;
+            } else if supervised || qdrant_dashboard_available(config) || static_content_dir.is_none()
+            {
                 return Ok(());
             } else {
+                if !qdrant_start_allowed() {
+                    return Ok(());
+                }
                 terminate_qdrant_process(pid)?;
                 wait_for_qdrant_stop(config)?;
                 wait_for_qdrant_process_exit(pid)?;
             }
         } else {
-            return Ok(());
+            bail!(
+                "Qdrant at {} is reachable but is not owned by this agent-memory root; stop it or configure a different storage.qdrant.uri",
+                config.uri
+            );
         }
     }
     if let Some(state) = read_qdrant_server_state(root)? {
@@ -28,6 +54,12 @@ pub(crate) fn ensure_qdrant_server(root: &Path, config: &QdrantConfig) -> Result
                 config.uri
             );
         }
+    }
+    if !qdrant_start_allowed() {
+        bail!(
+            "Qdrant is not running under an agent-memory service for {}; run `agent-memory init --start-service` or `agent-memory service start`",
+            root.display()
+        );
     }
 
     fs::create_dir_all(&storage_path)?;
@@ -61,13 +93,13 @@ pub(crate) fn ensure_qdrant_server(root: &Path, config: &QdrantConfig) -> Result
     if let Some(static_content_dir) = &static_content_dir {
         command.env("QDRANT__SERVICE__STATIC_CONTENT_DIR", static_content_dir);
     }
-    crate::service::detach_daemon(&mut command);
     let mut child = command
         .spawn()
         .with_context(|| format!("failed to start Qdrant binary '{}'", config.binary))?;
     let started_at = crate::util::now();
     let state = json!({
         "pid": child.id(),
+        "parent_pid": std::process::id(),
         "uri": config.uri,
         "endpoint": config.uri,
         "storage_path": storage_path,
@@ -80,6 +112,10 @@ pub(crate) fn ensure_qdrant_server(root: &Path, config: &QdrantConfig) -> Result
     write_qdrant_server_state(root, &state)?;
     wait_for_qdrant_start(&mut child, config, &log_path)?;
     Ok(())
+}
+
+pub(crate) fn enable_qdrant_supervisor_context() {
+    std::env::set_var("AGENT_MEMORY_QDRANT_SUPERVISOR", "service");
 }
 
 pub(crate) fn qdrant_server_status(root: &Path, config: &QdrantConfig) -> Result<Value> {
@@ -128,6 +164,29 @@ fn qdrant_state_requires_restart(
         .map(|binary| binary == config.binary)
         .unwrap_or(false);
     !(storage_matches && binary_matches)
+}
+
+fn qdrant_process_is_supervised(root: &Path, qdrant_pid: u32) -> bool {
+    let Some(parent_pid) = crate::service::process_parent_pid(qdrant_pid) else {
+        return false;
+    };
+    if parent_pid == std::process::id() {
+        return true;
+    }
+    crate::service::read_service_state(root)
+        .ok()
+        .flatten()
+        .filter(|state| state.service_pid == parent_pid)
+        .map(|state| crate::service::pid_exists(state.service_pid))
+        .unwrap_or(false)
+}
+
+fn qdrant_start_allowed() -> bool {
+    qdrant_start_allowed_from_env(std::env::var("AGENT_MEMORY_QDRANT_SUPERVISOR").ok().as_deref())
+}
+
+fn qdrant_start_allowed_from_env(value: Option<&str>) -> bool {
+    value == Some("service")
 }
 
 fn wait_for_qdrant_start(

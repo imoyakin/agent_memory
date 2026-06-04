@@ -87,7 +87,8 @@ pub(crate) fn run_service_loop(
     let monitor_stop = Arc::clone(&stop);
     let monitor_root = root.clone();
     let monitor_config = user_config.clone();
-    let monitor_qdrant_pid = qdrant_pid_for_root(&root).ok().flatten();
+    let owned_qdrant_pid = qdrant_pid_for_root(&root).ok().flatten();
+    let monitor_qdrant_pid = owned_qdrant_pid;
     let monitor_thread = thread::spawn(move || {
         let pid_check_interval = Duration::from_secs(pid_interval);
         let mut last_pid_check = Instant::now() - pid_check_interval;
@@ -112,13 +113,21 @@ pub(crate) fn run_service_loop(
                         break;
                     }
                     if last_pid_check.elapsed() >= pid_check_interval {
-                        state.agent_pids = sorted_pids(
+                        let previous_agent_pids = state.agent_pids.clone();
+                        let live_agent_pids = sorted_pids(
                             state
                                 .agent_pids
                                 .into_iter()
                                 .filter(|pid| pid_exists(*pid))
                                 .collect(),
                         );
+                        if service_lost_all_tracked_agents(&previous_agent_pids, &live_agent_pids)
+                        {
+                            monitor_stop.store(true, Ordering::SeqCst);
+                            terminate_owned_qdrant(monitor_qdrant_pid);
+                            break;
+                        }
+                        state.agent_pids = live_agent_pids;
                         last_pid_check = Instant::now();
                     }
                     state.memory_count = read_records(&monitor_root)
@@ -155,6 +164,7 @@ pub(crate) fn run_service_loop(
     let _ = ipc_thread.join();
     let _ = worker_thread.join();
     let _ = monitor_thread.join();
+    terminate_owned_qdrant(owned_qdrant_pid);
     if let Ok(Some(mut state)) = read_service_state(&root) {
         state.service_pid = 0;
         state.agent_pids.clear();

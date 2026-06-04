@@ -9,7 +9,7 @@ Generate an editable config in the target repo:
 Initialize memory from it:
 
 ```bash
-<skill-root>/bin/agent-memory setup --init
+<skill-root>/bin/agent-memory init --start-service
 ```
 
 Codex skills are passive instruction files. Codex does not automatically run the
@@ -17,11 +17,23 @@ install or setup commands just because `SKILL.md` exists or is loaded.
 
 `scripts/install-agent-memory.sh` installs the runtime entrypoint at
 `bin/agent-memory`. Binary mode downloads GitHub Release assets; source mode
-builds the Rust CLI locally. By default it also creates the target repository's default
-`.agents/agent_memory/memory.yaml` when missing and injects the managed
-Agent Memory description into that repository's `AGENTS.md`; use
-`--target-root` to choose the repository and `--no-update-agents` to skip this
-hook.
+builds the Rust CLI locally. The selected mode, platform, repository, resolved
+release tag, and weekly update-check timestamp are recorded in
+`bin/install-state.json`.
+
+Run `scripts/install-agent-memory.sh --check-updates` to check the configured
+GitHub repository's latest Release page at most once every seven days. Binary
+installs update silently by downloading the latest platform binary and the
+release-packaged skill files. Source installs do not rebuild silently; the
+script prints a prompt for the agent to ask the user whether to update
+`agent_memory`, because compiling the Rust binary may take time.
+
+By default the install script also creates the target repository's default
+`.agents/agent_memory/memory.yaml` when missing and injects the managed Agent
+Memory description into that repository's `AGENTS.md`; use `--target-root` to
+choose the repository and `--no-update-agents` to skip this hook. Updating
+release assets never overwrites target-repository memory config such as
+`memory.yaml`, `.memory/`, or `.agents/agent_memory/`.
 
 The user-editable config is `memory.yaml`. Discovery checks, in order:
 
@@ -85,15 +97,18 @@ storage:
     binary: qdrant
 ```
 
-The CLI starts Qdrant directly from `storage.qdrant.binary` when the configured
-REST endpoint is not already reachable. It sets Qdrant's storage path to
-`storage.qdrant.storage_path`, uses the configured REST port for HTTP, and uses
-the next port for Qdrant gRPC. When `storage.qdrant.static_content_dir` is set,
-or when `bin/qdrant-static/` exists beside the installed binary, the CLI also
-passes that directory to Qdrant so the official `/dashboard` Web UI is
-available. Docker is not used. Records are stored as Qdrant points whose id is
-`uuid`, vector is the active embedding vector, and payload contains the
-existing logical record fields.
+The resident `agent-memory` service starts Qdrant directly from
+`storage.qdrant.binary` when the configured REST endpoint is not already
+reachable. Qdrant remains a direct child of that service process. The service
+sets Qdrant's storage path to `storage.qdrant.storage_path`, uses the configured
+REST port for HTTP, and uses the next port for Qdrant gRPC. When
+`storage.qdrant.static_content_dir` is set, or when `bin/qdrant-static/` exists
+beside the installed binary, the service also passes that directory to Qdrant so
+the official `/dashboard` Web UI is available. Docker is not used. If the REST
+endpoint is already occupied by a Qdrant process that is not parented by the
+service for this root, initialization fails instead of reusing it. Records are
+stored as Qdrant points whose id is `uuid`, vector is the active embedding
+vector, and payload contains the existing logical record fields.
 
 The configured vector database is the only live memory data source. The record
 payload contains the content, search keys, metadata, reliability fields, vector,
@@ -115,8 +130,9 @@ Qdrant dashboard proxy URL:
 agent-memory service ui start
 ```
 
-The command starts the configured Qdrant binary if needed, starts or reuses the
-local agent-memory gateway, and returns a URL like
+The command ensures the resident service is active, uses that service-owned
+Qdrant process, starts or reuses the local agent-memory gateway, and returns a
+URL like
 `http://127.0.0.1:19531/view/<root_hash>/dashboard`. That URL proxies Qdrant's
 official `/dashboard` UI through the gateway.
 

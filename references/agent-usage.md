@@ -9,12 +9,19 @@ official documentation, and fresh tool output outrank stored memory.
 
 ## Search Before Asking
 
-Before any memory operation, ensure `<skill-root>/bin/agent-memory` exists. If
-it is missing, run `<skill-root>/scripts/install-agent-memory.sh` and choose
-binary or source install. Binary install downloads release assets into `bin/`;
-source install builds the current checkout locally. The install script also
-injects the managed Agent Memory hook into the target repository's `AGENTS.md`
-by default and creates `.agents/agent_memory/memory.yaml` when needed; pass
+Before any memory operation, ensure `<skill-root>/bin/agent-memory` exists and
+run `<skill-root>/scripts/install-agent-memory.sh --check-updates`. If the
+binary is missing, the script performs the first install and asks for binary or
+source mode when it can prompt. Binary install downloads release assets into
+`bin/`; source install builds the current checkout locally. The install script
+records the choice in `bin/install-state.json`.
+
+Update checks look at GitHub Releases at most once every seven days. Binary
+installs update silently. Source installs print an instruction to ask the user
+whether to update `agent_memory`; do not compile a source update without user
+approval because it may take time. The install script also injects the managed
+Agent Memory hook into the target repository's `AGENTS.md` by default and
+creates `.agents/agent_memory/memory.yaml` when needed; pass
 `--target-root <repo>` to target a different repository.
 
 Before search, confirm the active config:
@@ -92,30 +99,31 @@ Run the worker when embedding should be processed:
 agent-memory --agent service worker --once
 ```
 
-Setup/init only prepares config and runtime files unless `init --start-service`
-is used. Start the resident daemon service when memory should remain available
-for the project:
+Setup/plain init only prepares config and runtime files. Use
+`init --start-service` or start the resident daemon service when memory should
+remain available for the current agent session:
 
 ```bash
 agent-memory --agent service start
 ```
 
 The command returns after the daemon is active. The service process is named
-`agent-memory` and detaches from the invoking shell/session. The service is one
-process per root/config and stays running until explicitly stopped:
+`agent-memory`; Qdrant remains its direct child process. The service is one
+process per root/config and stops when explicitly requested or when all tracked
+agent/ancestor PIDs have exited:
 
 ```bash
 agent-memory --agent service stop
 ```
 
-Agents can optionally register their live PID for status visibility:
+Agents can register additional live PIDs for status and lifetime tracking:
 
 ```bash
 agent-memory --agent service register --agent-pid "$AGENT_PID"
 ```
 
-Registered PIDs are pruned when they exit, but they do not control the daemon
-lifetime.
+Registered PIDs are pruned when they exit. When the tracked set becomes empty,
+the service exits and terminates its Qdrant child.
 
 ## Visual Inspection
 

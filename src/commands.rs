@@ -33,9 +33,9 @@ use crate::records::{
 };
 use crate::search::{combined_score, exact_results, merge_search_results, round4, vector_results};
 use crate::service::{
-    detach_daemon, pid_exists, register_agent_pids, registry_entries, request_service_status,
-    request_service_stop, request_service_worker, run_service_loop, service_status,
-    spawn_service_daemon, wait_for_service_start, write_registry,
+    default_agent_pids, detach_daemon, pid_exists, register_agent_pids, registry_entries,
+    request_service_status, request_service_stop, request_service_worker, run_service_loop,
+    service_status, spawn_service_daemon, wait_for_service_start, write_registry,
 };
 use crate::storage::{ensure_backend, qdrant_server_status};
 use crate::util::{now, parse_csv, safe_timestamp};

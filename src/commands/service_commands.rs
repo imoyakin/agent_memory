@@ -10,22 +10,15 @@ fn cmd_serve(
     let (project_root, config_path, user_config) =
         active_user_config(root_arg.clone(), config_arg)?;
     let runtime_root = resolve_memory_root(&user_config, &config_path, &project_root)?;
-    let live_agent_pids: Vec<u32> = agent_pids
+    let requested_agent_pids = if agent_pids.is_empty() {
+        default_agent_pids()
+    } else {
+        agent_pids
+    };
+    let live_agent_pids: Vec<u32> = requested_agent_pids
         .into_iter()
         .filter(|pid| *pid > 0 && pid_exists(*pid))
         .collect();
-    cmd_init(InitOptions {
-        root_arg: Some(project_root.clone()),
-        config_path_arg: Some(config_path.clone()),
-        provider: None,
-        model: None,
-        dim: None,
-        endpoint: None,
-        collection: None,
-        force: false,
-        update_agents: true,
-        start_service: false,
-    })?;
     let root = runtime_root;
     if service_status(&root)?
         .get("active")
@@ -58,6 +51,19 @@ fn cmd_serve(
             "service": service
         }));
     }
+    crate::storage::enable_qdrant_supervisor_context();
+    cmd_init(InitOptions {
+        root_arg: Some(project_root.clone()),
+        config_path_arg: Some(config_path.clone()),
+        provider: None,
+        model: None,
+        dim: None,
+        endpoint: None,
+        collection: None,
+        force: false,
+        update_agents: true,
+        start_service: false,
+    })?;
     run_service_loop(
         root,
         config_path,

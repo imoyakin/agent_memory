@@ -18,15 +18,24 @@ The preferred installed binary is `<skill-root>/bin/agent-memory`.
 
 ## Bootstrap First
 
-Before running memory commands, make sure the installed binary exists:
+Before running memory commands, make sure the installed binary exists and give
+the installation a chance to check GitHub Releases for a weekly update:
 
 ```bash
-test -x <skill-root>/bin/agent-memory || <skill-root>/scripts/install-agent-memory.sh
+<skill-root>/scripts/install-agent-memory.sh --check-updates
 ```
 
-When prompted, choose binary install to download release assets into `bin/`, or
-source install to build this checkout locally. Binary install downloads the Rust
-CLI. Source install builds the Rust CLI with Cargo.
+When prompted on first install, choose binary install to download release assets
+into `bin/`, or source install to build this checkout locally. Binary install
+downloads the Rust CLI. Source install builds the Rust CLI with Cargo. The
+choice is recorded in `bin/install-state.json`.
+
+`--check-updates` checks the latest GitHub Release at most once every seven
+days. Binary installs update silently by replacing `bin/agent-memory` and
+refreshing the release-packaged skill files. Source installs do not compile
+automatically; if an update is available, ask the user whether to update
+`agent_memory` because rebuilding may take time, then run the source install
+command shown by the script only after approval.
 
 The install script injects the managed Agent Memory description into the target
 repository's `AGENTS.md` by default and creates
@@ -88,10 +97,11 @@ gateway aggregates project and viewer status.
 
 The same gateway proxies Qdrant's official Web UI at
 `http://127.0.0.1:19531/view/<root_hash>/dashboard` by default. For
-Qdrant-backed projects, `service ui start` starts the local Qdrant binary if
-needed and returns that dashboard proxy URL. Direct Qdrant binaries require the
-Web UI static bundle; the install script places it in `bin/qdrant-static/`, and
-advanced installs may override it with `storage.qdrant.static_content_dir`.
+Qdrant-backed projects, `service ui start` ensures the resident service is
+active and returns that dashboard proxy URL for the service-owned Qdrant
+process. Direct Qdrant binaries require the Web UI static bundle; the install
+script places it in `bin/qdrant-static/`, and advanced installs may override it
+with `storage.qdrant.static_content_dir`.
 
 ## Terminal Interaction
 
@@ -138,10 +148,10 @@ default it writes `.agents/agent_memory/memory.yaml` and uses local Qdrant; use
 `--config` to override the config path.
 
 Ask the user to edit `memory.yaml` when provider/model/endpoint are not already
-known. Then initialize runtime state:
+known. Then initialize runtime state and start the supervised service:
 
 ```bash
-agent-memory setup --init
+agent-memory init --start-service
 ```
 
 Default local Ollama config:
@@ -151,12 +161,13 @@ Default local Ollama config:
 - dim: `4096`
 - endpoint: `http://localhost:11434`
 
-`--init` creates the target runtime `.memory/config.json`, active Qdrant
-backend, and managed AGENTS.md memory hook unless `--no-update-agents` is used.
-Memory records and embedding state are stored only in the configured vector
-database. Local Qdrant is started from the configured binary and stores points
-under `storage.qdrant.storage_path`. For configuration details, read
-`references/configuration.md`.
+`init --start-service` creates the target runtime `.memory/config.json`, starts
+the resident service, ensures the active Qdrant backend, and refreshes the
+managed AGENTS.md memory hook unless `--no-update-agents` is used. Memory
+records and embedding state are stored only in the configured vector database.
+Local Qdrant is started from the configured binary by the resident
+`agent-memory` service and stores points under `storage.qdrant.storage_path`.
+For configuration details, read `references/configuration.md`.
 
 Each generated `memory.yaml` contains `storage.instance_uuid`. That UUID is used
 to derive local Qdrant storage paths. The logical database name comes from the
@@ -165,9 +176,9 @@ installs. Qdrant uses that logical name as the collection name.
 
 ## Service Lifecycle
 
-Setup and init do not start a background process unless `init --start-service`
-is used. Start the resident service separately when memory should stay
-available for the project.
+Setup and plain init do not start a background process. Use
+`init --start-service` when memory should be available for the current agent
+session.
 
 Start one resident daemon service per project root:
 
@@ -177,23 +188,24 @@ agent-memory --agent service start
 
 The `service start` command starts the service in the background and returns
 after the daemon is active. The daemon uses threads for embedding work and PID
-monitoring. The OS process is named `agent-memory` and detaches from the
-invoking shell or agent session. It stays running until explicitly stopped:
+monitoring. The OS process is named `agent-memory`; Qdrant remains its direct
+child process. The service tracks the agent or ancestor process that started it
+and exits when all tracked agents are gone, or when explicitly stopped:
 
 ```bash
 agent-memory --agent service stop
 ```
 
-Agents may optionally register their live PID for status visibility:
+Agents may register additional live PIDs for status and lifetime tracking:
 
 ```bash
 agent-memory --agent service register --agent-pid "$AGENT_PID"
 ```
 
-Tracked PIDs are pruned periodically, but they do not control the service
-lifetime. If another service is already active for the same root, `service start`
-registers any provided live PID and exits instead of starting a second process.
-Service logs are written to `.memory/service.log`.
+Tracked PIDs are pruned periodically, and the service stops once all tracked
+agents are gone. If another service is already active for the same root,
+`service start` registers any provided live PID and exits instead of starting a
+second process. Service logs are written to `.memory/service.log`.
 
 Project installs are isolated by project root. Multiple agents in different
 repositories get independent `.memory/` state and independent services.
@@ -218,7 +230,8 @@ memories are returned only when `retrieval.associative.enabled` is true in
 
 If memory is not initialized, do not assume Codex will initialize it from this
 `SKILL.md`. Tell the agent/user to run `agent-memory setup` for the target
-project, edit the generated config, and then run `agent-memory setup --init`.
+project, edit the generated config, and then run
+`agent-memory init --start-service`.
 
 ## Advisory Priority
 
