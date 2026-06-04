@@ -1,211 +1,105 @@
 # Agent Memory
 
-Project-local memory skill and tools for coding agents.
+Agent Memory is a local-first memory system for coding agents. It gives an
+agent a durable project memory that survives context resets, new sessions, and
+different working days without sending the memory database to a hosted service.
 
-This repository is laid out as an installable Codex skill. Clone or install the
-repository root as the skill directory; the root contains `SKILL.md`, bundled
-CLI code, `references/`, and `assets/`.
+Use it when you want an agent to remember project conventions, decisions, known
+failures, user preferences, environment facts, and research conclusions, then
+retrieve that context before future work.
 
-The operational CLI is the Rust `agent-memory` binary. Installed skills should
-use `bin/agent-memory` as the stable entrypoint. Local vector storage defaults
-to a Qdrant server started from the `qdrant` binary by the resident
-`agent-memory` service, not Docker.
+## What It Does
 
-The storage and retrieval design is maintained in `DESIGN/`.
+- Stores durable memories as structured records with content, summary, keys,
+  tags, source, confidence, reliability metadata, and embedding state.
+- Searches memory through exact matching plus vector search, returning
+  advisory results that the agent must compare against current repo truth.
+- Runs one resident service per project root to supervise embedding work,
+  Qdrant, IPC status, and local process discovery.
+- Uses local Qdrant storage by default. Docker is not required.
+- Installs as a Codex skill with a stable `bin/agent-memory` entrypoint.
+- Injects a managed `AGENTS.md` block so future agents know how to discover,
+  search, and write memory for the current repository.
+- Provides a local gateway and Qdrant dashboard proxy for visual inspection.
+- Supports binary installs from GitHub Releases or local source builds with
+  Cargo.
 
-Example local install by clone:
+Memory is advisory. Current user instructions, live repository contents,
+official documentation, and fresh tool output always outrank stored memory.
+
+## Install
+
+Clone this repository as a skill directory:
 
 ```bash
-git clone <repo-url> ~/.codex/skills/agent-memory
+git clone https://github.com/imoyakin/agent_memory ~/.codex/skills/agent-memory
 ~/.codex/skills/agent-memory/scripts/install-agent-memory.sh
 ```
 
-The install script also refreshes the current target repository's `AGENTS.md`
-hook by default. It creates the default `.agents/agent_memory/memory.yaml` when
-needed and injects the managed memory instructions so agents can discover the
-config from the project before runtime initialization. Pass `--target-root` to
-inject a different project and `--no-update-agents` only when the AGENTS hook
-must be skipped.
+The installer offers two modes:
 
-After installing or updating the skill, restart Codex so the new `SKILL.md` is
-loaded.
+- Binary install downloads `agent-memory-<platform>` from GitHub Releases into
+  `bin/`.
+- Source install builds this checkout locally with Cargo.
 
-The skill requires `memory.yaml` before memory can work. Discovery checks an
-AGENTS.md pointer first, then `memory.yaml`, `.memory/memory.yaml`, and
-`.agents/agent_memory/memory.yaml`. The config should normally remain local;
-commit `assets/memory.example.yaml` as the shared example instead.
-
-The default root is the current working directory unless a parent `.memory/`
-directory already exists or `--root` is provided. Runtime state is stored under
-`.memory/` and is intentionally local:
-
-- `.memory/config.json` stores the active embedding profile and schema version.
-- `.memory/service.json`, `.memory/service.lock`, and `.memory/service.log` store service lifecycle state.
-- `.memory/qdrant/<project>-<storage.instance_uuid>/` is the default local Qdrant storage directory.
-- `.memory/qdrant-server.json` and `.memory/qdrant-server.log` track the local Qdrant binary process.
-
-Memory records are stored only in the configured vector database. There is no
-live JSONL or SQLite record/job database. New records are inserted into Qdrant
-immediately with `embedding_status: pending`; the worker updates the same point
-through `embedding`, `embedded`, or `failed` states and records retry/error
-metadata in payload fields.
-
-Initialize a project:
+Both modes converge on:
 
 ```bash
-bin/agent-memory setup
-# edit memory.yaml
-bin/agent-memory init --start-service
+~/.codex/skills/agent-memory/bin/agent-memory
 ```
 
-Codex does not automatically run this setup from `SKILL.md`; binary bootstrap
-and project initialization are explicit first-use steps for each installation
-and target repository.
+The selected mode, release tag, platform, and weekly update-check time are
+stored in `bin/install-state.json`. This file is local runtime metadata and is
+not committed.
 
-The install script supports two install modes:
+After installing or updating the skill, restart Codex so the updated `SKILL.md`
+is loaded.
 
-- Binary install downloads `agent-memory-<platform>` from GitHub Release assets
-  into `bin/`.
-- Source install builds the Rust CLI locally with Cargo.
+## Initialize A Project
 
-Both modes converge on `bin/agent-memory`. The script records installation
-metadata in `bin/install-state.json`, which is local and ignored by git.
-Use `scripts/install-agent-memory.sh --check-updates` from the skill root to
-check GitHub Releases at most once per week. Binary installs update silently by
-replacing the installed binary and refreshing release-packaged skill files.
-Source installs report the available update and ask the agent to confirm with
-the user before spending time rebuilding with Cargo. Update checks and release
-package refreshes do not overwrite the target repository's `memory.yaml`,
-`.memory/`, or `.agents/agent_memory/` config.
-When Qdrant support is enabled, the script also installs the Qdrant binary and
-the official Qdrant Web UI static bundle under `bin/qdrant-static/` so
-`/dashboard` works without Docker.
-
-GitHub Releases publish `agent-memory-<platform>` binaries, matching `.sha256`
-files, and `agent-memory-skill.tar.gz` for release-packaged skill updates.
-
-By default setup writes `.agents/agent_memory/memory.yaml` and records that path
-plus memory operating rules in `AGENTS.md`. `init` also refreshes the managed
-AGENTS.md block so future coding agents know to run `agent-memory --agent memory
-discover`, search before history-sensitive work, and write durable memory when
-appropriate. Uninstall removes only the exact generated AGENTS text; if that
-marker block has been edited by a user, it is left untouched instead of deleting
-by marker range. Use `--config` to place the config at `.memory/memory.yaml` or
-root `memory.yaml` instead.
-
-Every generated config contains `storage.instance_uuid`. The UUID stays in local
-Qdrant storage paths to avoid directory collisions. The logical database name is
-separate: project installs use the last directory name, and global installs use
-the current computer user name. Qdrant uses that logical name as the collection
-name.
-
-Discover the active config:
+Run setup from the repository that should receive memory:
 
 ```bash
-agent-memory memory discover
+agent-memory setup
 ```
 
-CLI output is human-readable by default. Add `--agent` to any command when an
-agent, script, or tool needs structured JSON:
+Edit the generated `memory.yaml` for your embedding provider, model, dimension,
+and endpoint. Then initialize runtime state and start the supervised service:
+
+```bash
+agent-memory init --start-service
+```
+
+By default, setup writes `.agents/agent_memory/memory.yaml` and records that
+path in a managed `AGENTS.md` block. Discovery checks this order:
+
+1. `AGENTS.md` memory config pointer
+2. `memory.yaml`
+3. `.memory/memory.yaml`
+4. `.agents/agent_memory/memory.yaml`
+
+Use `--config` when you want the config at another supported path. Commit
+`assets/memory.example.yaml` as a shared example; keep real `memory.yaml` files
+local unless your project intentionally wants to share them.
+
+## Daily Agent Workflow
+
+Discover active configuration:
 
 ```bash
 agent-memory --agent memory discover
 ```
 
-The human output is the interactive terminal view. It uses concise headings,
-Markdown-style key/value tables, record/search/process tables, and status
-summaries. Empty key/value fields are hidden and long table cells can be
-truncated to keep the view readable. Treat this view as display-only; use
-`--agent` for stable field names and complete values.
-
-List running `agent-memory` processes on this computer:
+Search before history-sensitive work:
 
 ```bash
-agent-memory ps
+agent-memory --agent memory search "release packaging qdrant ownership"
 ```
 
-The process list discovers the local gateway, local IPC endpoints, and attached
-remote gateways. Local memory services are validated with live IPC `status`, and
-the table shows `role`, `scope`, `workdir`, `root`, `status`, `viewer`, and
-`pid`. On Unix/macOS it enumerates runtime socket files:
-Linux prefers `$XDG_RUNTIME_DIR/agent-memory/sockets`; macOS and Unix fallback
-use `/tmp/agent-memory-$UID/sockets`. `AGENT_MEMORY_RUNTIME_DIR` overrides the
-runtime dir. Windows keeps `~/.memory/processes.json` as a named-pipe candidate
-index. IPC status is the only runtime authority: endpoints that do not return an
-active service are pruned before display. With `--agent`, the JSON shape is
-`main`, `memories`, `remotes`, and `pruned`.
-
-Start the local UI gateway lease holder:
+Add durable memory after evidence-backed discoveries:
 
 ```bash
-agent-memory gateway start
-agent-memory gateway status
-```
-
-The gateway writes `~/.memory/ui-gateway.json`, refreshes a short lease while
-active, and lists project services plus active viewers from the global
-registries. If the gateway process exits or the lease expires, another
-`gateway start` can take over. This is local coordination.
-
-`gateway start` is the local main process. It serves JSON status APIs and
-proxies Qdrant's official Web UI under
-`http://127.0.0.1:19531/view/<root_hash>/dashboard`. For Qdrant projects,
-`agent-memory service ui start` first ensures the resident service is active,
-then uses that service-owned Qdrant process, starts or reuses the gateway, and
-returns that proxied dashboard URL. The gateway no longer serves a custom
-memory-card UI. Direct Qdrant binaries need Web UI static files; the install
-script provisions them at `bin/qdrant-static/`, or you can set
-`storage.qdrant.static_content_dir` to an existing static bundle.
-
-Remote SSH use is explicit pairing. On the remote host, run
-`agent-memory --agent gateway status` and use the returned `attach` object. Then
-create the SSH port forward yourself, for example:
-
-```bash
-ssh -L 19532:127.0.0.1:19531 user@host
-agent-memory gateway attach --name workbox --url http://127.0.0.1:19532 --token <token>
-agent-memory gateway remotes
-```
-
-Attached remote projects are exposed through local URLs such as
-`/remote/workbox/view/<root_hash>/dashboard`. Agent Memory does not create SSH
-tunnels and does not initiate callbacks from the remote host.
-
-Setup/init prepares local files only unless `init --start-service` is used.
-Qdrant is started only by the resident `agent-memory` service. If the configured
-Qdrant endpoint is already occupied by a process that is not parented by the
-service for this root, startup fails instead of silently reusing that database.
-
-Start the resident daemon service for the project root:
-
-```bash
-agent-memory service start
-```
-
-`service start` returns after the daemon is active. The OS process is named
-`agent-memory`; Qdrant remains its direct child process. The service tracks the
-agent or ancestor process that started it and exits when all tracked agents are
-gone, or when explicitly stopped:
-
-```bash
-agent-memory service stop
-```
-
-Agents can register additional live PIDs for status and lifetime tracking:
-
-```bash
-agent-memory service register --agent-pid "$AGENT_PID"
-```
-
-Only one service runs per project root. In global mode, multiple agent PIDs can
-register with the same global service; registered PIDs are pruned when they
-exit, and the service stops once all tracked agents are gone. Global mode only
-allows `preference` and `environment` memories.
-
-Add a memory:
-
-```bash
-agent-memory memory add \
+agent-memory --agent memory add \
   --content "Prefer repo truth over stale memory when answering code questions." \
   --type preference \
   --source-kind user \
@@ -217,40 +111,158 @@ agent-memory memory add \
 Embed pending records:
 
 ```bash
-agent-memory service worker --once
+agent-memory --agent service worker --once
 ```
 
-Search:
+Human-readable output is the default. Agents, scripts, tests, and integrations
+should pass `--agent` and parse JSON instead of scraping terminal tables.
+
+## Runtime Model
+
+Runtime state is local to the project root unless `--root` or `memory_root`
+points elsewhere:
+
+- `.memory/config.json` stores the normalized runtime config.
+- `.memory/service.json`, `.memory/service.lock`, and `.memory/service.log`
+  track the resident service.
+- `.memory/qdrant/<project>-<storage.instance_uuid>/` stores local Qdrant data.
+- `.memory/qdrant-server.json` and `.memory/qdrant-server.log` track the
+  service-owned Qdrant process.
+
+Records live only in the configured vector database. There is no live JSONL,
+SQLite, or ad hoc file database. New records are inserted with
+`embedding_status: pending`; the worker updates the same point through
+`embedding`, `embedded`, or `failed`.
+
+Qdrant is started only by the resident `agent-memory` service. If the configured
+endpoint is already occupied by a Qdrant process that is not parented by the
+service for this root, startup fails instead of silently reusing the wrong
+database.
+
+## Service And UI
+
+Start or reuse the resident service:
 
 ```bash
-agent-memory memory search "repo truth memory preference"
+agent-memory service start
+agent-memory service status
 ```
 
-By default, search prints a compact table for humans. With `--agent`, it returns
-JSON. Search returns one highest-scoring direct memory by default. When
-`retrieval.associative.enabled` is true in `memory.yaml`, it can return extra
-related memories marked with `associative_*` match reasons. Search results are
-advisory memory and should be checked against current user instructions,
-repository contents, and official documents.
-
-Dump records:
+List local Agent Memory processes:
 
 ```bash
-agent-memory memory dump
+agent-memory ps
 ```
 
-The dump command writes an explicit JSON export of records and runtime config.
-It is not a live storage backend.
-
-Visualization:
-
-- For local Qdrant, run `agent-memory service ui start` and open the returned
-  Qdrant dashboard proxy URL.
-- For a gateway overview, run `agent-memory gateway start`, then inspect
-  `agent-memory gateway projects` or `GET /api/projects`.
-- Check and stop the Qdrant dashboard helper with:
+Open the local Qdrant dashboard through the Agent Memory gateway:
 
 ```bash
-agent-memory service ui status
-agent-memory service ui stop
+agent-memory service ui start
 ```
+
+The returned URL looks like:
+
+```text
+http://127.0.0.1:19531/view/<root_hash>/dashboard
+```
+
+The gateway can also attach explicit SSH-forwarded remote gateways:
+
+```bash
+ssh -L 19532:127.0.0.1:19531 user@host
+agent-memory gateway attach --name workbox --url http://127.0.0.1:19532 --token <token>
+agent-memory gateway remotes
+```
+
+Agent Memory does not create SSH tunnels and does not initiate callbacks from
+remote hosts.
+
+## Updates
+
+Run a weekly release check from the skill root:
+
+```bash
+scripts/install-agent-memory.sh --check-updates
+```
+
+Binary installs update silently by replacing `bin/agent-memory` and refreshing
+release-packaged skill files. Source installs do not rebuild silently; the
+script tells the agent to ask the user whether to update because Cargo rebuilds
+may take time.
+
+Update checks and release package refreshes do not overwrite the target
+repository's `memory.yaml`, `.memory/`, or `.agents/agent_memory/` config.
+
+## Releases
+
+GitHub Releases are generated by CI from version tags:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow builds and uploads:
+
+- `agent-memory-darwin-arm64`
+- `agent-memory-darwin-x64`
+- `agent-memory-linux-x64`
+- matching `.sha256` files
+- `agent-memory-skill.tar.gz`
+- `agent-memory-skill.tar.gz.sha256`
+
+The release skill package contains the skill text, installer scripts, Rust
+source, assets, references, and design docs. It does not contain local
+`memory.yaml`, `.memory/`, `.agents/`, or `bin/` runtime state.
+
+## Configuration
+
+Default local Ollama embedding config:
+
+```yaml
+embedding:
+  provider: ollama
+  model: qwen3-embedding:8b
+  dim: 4096
+  endpoint: http://localhost:11434
+```
+
+OpenAI-compatible embeddings:
+
+```yaml
+embedding:
+  provider: openai
+  model: text-embedding-3-small
+  dim: 1536
+  endpoint: https://api.openai.com/v1/embeddings
+```
+
+For OpenAI-compatible providers, pass credentials through environment variables
+such as `OPENAI_API_KEY`. Do not store API keys in `memory.yaml`.
+
+For the full configuration contract, see `references/configuration.md`.
+
+## Uninstall
+
+Remove a project integration:
+
+```bash
+~/.codex/skills/agent-memory/scripts/uninstall-agent-memory.sh --project-root <repo>
+```
+
+The uninstall script removes only the exact managed AGENTS block generated by
+Agent Memory. If a user edited that marker block, uninstall leaves it untouched.
+
+## Multilingual README
+
+zdoc currently describes itself as a free tool that translates GitHub READMEs
+into multiple languages and keeps them up to date:
+
+```text
+https://www.zdoc.app/en/imoyakin/agent_memory
+```
+
+If zdoc remains free for this repository, use it as the public multilingual
+README entrypoint. If it introduces paid requirements or stops serving this
+repository, keep the English README as the source of truth and publish
+translations from repository-managed Markdown files instead.
